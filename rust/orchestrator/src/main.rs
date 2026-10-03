@@ -19,6 +19,9 @@ fn main() -> Result<()>
             report.cycles,
             report.bins_hit
         );
+
+        let category_counts = report.category_counts();
+        println!(" category_counts={:?}", category_counts);
     }
 
     Ok(())
