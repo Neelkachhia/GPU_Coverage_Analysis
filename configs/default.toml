@@ -1,0 +1,11 @@
+[vortex]
+repo_path = "/home/neel/projects/vortex"
+
+[build]
+out_dir = "data/runs"
+
+[coverage]
+model = "v1"
+
+[python]
+venv = ".venv"

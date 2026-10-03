@@ -1,0 +1,32 @@
+# Rust
+target/
+**/target/
+Cargo.lock
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# CMake / C++
+build/
+**/build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+Makefile
+
+# Data / generated outputs
+data/runs/
+data/coverage/
+data/plots/
+kernels/generated/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+

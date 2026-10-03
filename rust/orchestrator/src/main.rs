@@ -1,0 +1,25 @@
+use anyhow::Result;
+use kernelgen::generate_seed_kernels;
+use runner::run_kernel_mock;
+use selector::greedy_score;
+
+fn main() -> Result<()>
+{
+    let kernels = generate_seed_kernels()?;
+
+    println!("Generated {} seed kernels", kernels.len());
+
+    for k in kernels
+    {
+        let report = run_kernel_mock(&k)?;
+        println!(
+            "kernel={} score={} cycles={} bins={:?}",
+            k.name,
+            greedy_score(&report),
+            report.cycles,
+            report.bins_hit
+        );
+    }
+
+    Ok(())
+}

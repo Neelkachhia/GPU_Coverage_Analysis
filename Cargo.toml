@@ -1,0 +1,8 @@
+[workspace]
+members = [
+      "rust/orchestrator",
+      "rust/kernelgen",
+      "rust/coverage_model",
+      "rust/selector",
+      "rust/runner"]
+resolver = "2"

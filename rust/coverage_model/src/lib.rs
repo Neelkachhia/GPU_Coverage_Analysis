@@ -1,0 +1,78 @@
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::collections::HashSet;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum CoverageCategory 
+{
+    Divergence,
+    Scheduler,
+    Barrier, 
+    Memory,
+    Progress,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct CoverageBinId
+{
+    pub category: CoverageCategory, 
+    pub name: String,
+}
+
+impl CoverageBinId
+{
+    pub fn new(category: CoverageCategory, name: impl Into<String>) -> Self
+    {
+        Self
+        {
+            category,
+            name: name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CoverageReport
+{
+    pub bins_hit: Vec<CoverageBinId>,
+    pub cycles: u64,
+    pub bug_found: bool,
+}
+
+impl CoverageReport
+{
+    pub fn unique_bin_count(&self) -> usize
+    {
+        self.bins_hit.iter().cloned().collect::<HashSet<_>>().len()
+    }
+
+    pub fn merged_with(&self, other: &CoverageReport) -> CoverageReport
+    {
+        let mut merged = self.bins_hit.clone();
+        merged.extend(other.bins_hit.clone());
+
+        CoverageReport
+        {
+            bins_hit: merged,
+            cycles: self.cycles + other.cycles,
+            bug_found: self.bug_found || other.bug_found,
+        }
+    }
+
+    pub fn category_counts(&self) -> HashMap<CoverageCategory, usize>
+    {
+        let mut unique = HashSet::new();
+        for bin in &self.bins_hit
+        {
+            unique.insert(bin.clone());
+        }
+
+        let mut counts = HashMap::new();
+        for bin in unique
+        {
+            *counts.entry(bin.category).or_insert(0) += 1;
+        }
+
+        counts
+    }
+}
