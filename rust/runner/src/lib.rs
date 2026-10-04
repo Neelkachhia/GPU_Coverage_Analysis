@@ -1,5 +1,5 @@
 use anyhow::Result;
-use coverage_model::{CoverageBinId, CoverageCategory, CoverageReport};
+use coverage_model::{CoverageBinId, CoverageReport};
 use kernelgen::KernelSpec;
 
 pub fn run_kernel_mock(spec: &KernelSpec) -> Result<CoverageReport>
@@ -8,37 +8,22 @@ pub fn run_kernel_mock(spec: &KernelSpec) -> Result<CoverageReport>
 
     if spec.branch_mode != "none"
     {
-        bins.push(CoverageBinId::new(
-                CoverageCategory::Divergence,
-                "divergence_occurred",
-                ));
+        bins.push(CoverageBinId::divergence("divergence_occurred"));
     }
 
     if spec.barriers > 0
     {
-        bins.push(CoverageBinId::new(
-                CoverageCategory::Barrier,
-                "barrier_local",
-                ));
+        bins.push(CoverageBinId::barrier("barrier_local"));
     }
 
     if spec.stride > 8
     {
-        bins.push(CoverageBinId::new(
-                CoverageCategory::Memory,
-                "memory_multi_line",
-                ));
-        bins.push(CoverageBinId::new(
-                CoverageCategory::Memory,
-                "bank_conflict",
-                ));
+        bins.push(CoverageBinId::memory("memory_multi_line"));
+        bins.push(CoverageBinId::memory("bank_conflict"));
     }
     else
     {
-        bins.push(CoverageBinId::new(
-                CoverageCategory::Memory,
-                "memory_single_line",
-                ));
+        bins.push(CoverageBinId::memory("memory_single_line"));
     }
 
     Ok(CoverageReport {

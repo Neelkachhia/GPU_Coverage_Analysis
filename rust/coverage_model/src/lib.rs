@@ -29,6 +29,31 @@ impl CoverageBinId
             name: name.into(),
         }
     }
+
+    pub fn divergence(name: impl Into<String>) -> Self
+    {
+        Self::new(CoverageCategory::Divergence, name)
+    }
+
+    pub fn scheduler(name: impl Into<String>) -> Self
+    {
+        Self::new(CoverageCategory::Scheduler, name)
+    }
+
+    pub fn barrier(name: impl Into<String>) -> Self
+    {
+        Self::new(CoverageCategory::Barrier, name)
+    }
+
+    pub fn memory(name: impl Into<String>) -> Self
+    {
+        Self::new(CoverageCategory::Memory, name)
+    }
+
+    pub fn progress(name: impl Into<String>) -> Self
+    {
+        Self::new(CoverageCategory::Progress, name)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
