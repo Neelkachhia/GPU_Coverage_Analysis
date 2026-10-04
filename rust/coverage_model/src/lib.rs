@@ -11,6 +11,7 @@ pub enum CoverageCategory
     Memory,
     Progress,
     Occupancy,
+    Synchronization,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -59,6 +60,11 @@ impl CoverageBinId
     pub fn occupancy(name: impl Into<String>) -> Self
     {
         Self::new(CoverageCategory::Occupancy, name)
+    }
+
+    pub fn synchronization(name: impl Into<String>) -> Self
+    {
+        Self::new(CoverageCategory::Synchronization, name)
     }
 }
 

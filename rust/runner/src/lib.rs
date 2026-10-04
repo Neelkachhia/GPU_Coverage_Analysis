@@ -24,6 +24,7 @@ pub fn run_kernel_mock(spec: &KernelSpec) -> Result<CoverageReport>
     if spec.barriers > 0
     {
         bins.push(CoverageBinId::barrier("barrier_local"));
+        bins.push(CoverageBinId::synchronization("wavefront_sync"));
     }
 
     if spec.stride > 8
