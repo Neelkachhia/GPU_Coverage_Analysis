@@ -11,6 +11,11 @@ pub fn run_kernel_mock(spec: &KernelSpec) -> Result<CoverageReport>
         bins.push(CoverageBinId::divergence("divergence_occurred"));
     }
 
+    if spec.branch_mode == "nested"
+    {
+        bins.push(CoverageBinId::divergence("nested_divergence"));
+    }
+
     if spec.workgroups <= 4
     {
         bins.push(CoverageBinId::occupancy("low_occupancy"));

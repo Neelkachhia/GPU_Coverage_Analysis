@@ -42,6 +42,15 @@ pub fn generate_seed_kernels() -> Result<Vec<KernelSpec>>
            stride: 16,
            barriers: 0,
         },
+
+       KernelSpec {
+           name: "nested_divergence".into(),
+           workgroups: 6,
+           local_size: 8,
+           branch_mode: "nested".into(),
+           stride: 4,
+           barriers: 0,
+        },
     ])
 }
 
