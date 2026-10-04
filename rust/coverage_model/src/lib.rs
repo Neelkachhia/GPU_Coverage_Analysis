@@ -10,6 +10,7 @@ pub enum CoverageCategory
     Barrier, 
     Memory,
     Progress,
+    Occupancy,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -53,6 +54,11 @@ impl CoverageBinId
     pub fn progress(name: impl Into<String>) -> Self
     {
         Self::new(CoverageCategory::Progress, name)
+    }
+
+    pub fn occupancy(name: impl Into<String>) -> Self
+    {
+        Self::new(CoverageCategory::Occupancy, name)
     }
 }
 

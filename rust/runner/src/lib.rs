@@ -11,6 +11,16 @@ pub fn run_kernel_mock(spec: &KernelSpec) -> Result<CoverageReport>
         bins.push(CoverageBinId::divergence("divergence_occurred"));
     }
 
+    if spec.workgroups <= 4
+    {
+        bins.push(CoverageBinId::occupancy("low_occupancy"));
+    }
+
+    else
+    {
+        bins.push(CoverageBinId::occupancy("high_occupancy"));
+    }
+
     if spec.barriers > 0
     {
         bins.push(CoverageBinId::barrier("barrier_local"));
