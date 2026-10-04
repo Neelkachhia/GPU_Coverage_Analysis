@@ -75,4 +75,12 @@ impl CoverageReport
 
         counts
     }
+
+    pub fn marginal_bin_count_against(&self, baseline: &CoverageReport) -> usize
+    {
+        let baseline_set: HashSet<_> = baseline.bins_hit.iter().cloned().collect();
+        let self_set: HashSet<_> = self.bins_hit.iter().cloned().collect();
+
+        self_set.difference(&baseline_set).count()
+    }
 }
