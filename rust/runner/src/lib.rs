@@ -32,7 +32,14 @@ pub fn run_kernel_mock(spec: &KernelSpec) -> Result<CoverageReport>
         bins.push(CoverageBinId::synchronization("wavefront_sync"));
     }
 
-    if spec.stride > 8
+    if spec.stride > 32
+    {
+        bins.push(CoverageBinId::memory("memory_multi_line"));
+        bins.push(CoverageBinId::memory("bank_conflict"));
+        bins.push(CoverageBinId::memory("high_memory_spread"));
+    }
+
+    else if spec.stride > 8
     {
         bins.push(CoverageBinId::memory("memory_multi_line"));
         bins.push(CoverageBinId::memory("bank_conflict"));

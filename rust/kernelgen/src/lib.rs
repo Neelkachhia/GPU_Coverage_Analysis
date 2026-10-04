@@ -51,6 +51,15 @@ pub fn generate_seed_kernels() -> Result<Vec<KernelSpec>>
            stride: 4,
            barriers: 0,
         },
+
+       KernelSpec {
+           name: "memory_scatter".into(),
+           workgroups: 8,
+           local_size: 8,
+           branch_mode: "none".into(),
+           stride: 64,
+           barriers: 0,
+        },
     ])
 }
 
