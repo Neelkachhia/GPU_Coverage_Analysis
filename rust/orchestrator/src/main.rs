@@ -20,7 +20,7 @@ fn main() -> Result<()>
             greedy_score(&report),
             marginal_score(&report, &baseline),
             report.cycles,
-            report.bins_hit
+            report.unique_bins()
         );
 
         let category_counts = report.category_counts();

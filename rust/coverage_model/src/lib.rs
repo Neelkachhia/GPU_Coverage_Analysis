@@ -120,4 +120,23 @@ impl CoverageReport
 
         self_set.difference(&baseline_set).count()
     }
+
+    pub fn unique_bins(&self) -> Vec<CoverageBinId>
+    {
+        let mut unique: Vec<_> = self
+            .bins_hit
+            .iter()
+            .cloned()
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        unique.sort_by(|a, b| {
+            let a_key = (format!("{:?}", a.category), a.name.clone());
+            let b_key = (format!("{:?}", b.category), b.name.clone());
+            a_key.cmp(&b_key)
+        });
+
+        unique
+    }
 }
