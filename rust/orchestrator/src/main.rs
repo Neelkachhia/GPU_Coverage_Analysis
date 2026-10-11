@@ -2,7 +2,7 @@ use anyhow::Result;
 use coverage_model::CoverageReport;
 use kernelgen::{generate_seed_kernels, KernelSpec};
 use runner::run_kernel_mock;
-use selector::{greedy_score, marginal_score};
+use selector::{efficiency_score, greedy_score, marginal_score};
 
 fn main() -> Result<()>
 {
@@ -19,13 +19,21 @@ fn main() -> Result<()>
         evaluated.push((k, report));
     }
 
+    evaluated.sort_by(|a, b| a.0.name.cmp(&b.0.name));
+
     for (k, report) in &evaluated
     {
         println!(
-            "kernel={} score={} marginal={} cycles={} bins={:?}",
+            "kernel={} 
+            score={} 
+            marginal={} 
+            efficiency={:.6} 
+            cycles={} 
+            bins={:?}",
             k.name,
             greedy_score(report),
             marginal_score(report, &accumulated),
+            efficiency_score(report, &accumulated),
             report.cycles,
             report.unique_bins()
         );
