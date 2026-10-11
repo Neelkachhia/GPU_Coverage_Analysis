@@ -24,6 +24,7 @@ fn main() -> Result<()>
     for (k, report) in &evaluated
     {
         let fits_budget = accumulated.cycles_used() + report.cycles_used() <= cycle_budget;
+        let selected = fits_budget;
         println!(
             "kernel={} 
             score={} 
@@ -31,6 +32,7 @@ fn main() -> Result<()>
             efficiency={:.6} 
             cycles={}
             fits_budget={}
+            selected={}
             bins={:?}",
             k.name,
             greedy_score(report),
@@ -38,13 +40,14 @@ fn main() -> Result<()>
             efficiency_score(report, &accumulated),
             report.cycles,
             fits_budget,
+            selected,
             report.unique_bins()
         );
 
         let category_counts = report.category_counts();
         println!(" category_counts={:?}", category_counts);
 
-        if fits_budget
+        if selected
         {
             accumulated = accumulated.merged_with(report);
         }
@@ -68,6 +71,11 @@ fn main() -> Result<()>
     println!(
         "Budget respected = {}",
         accumulated.cycles_used() <= cycle_budget
+        );
+
+    println!(
+        "Final category counts = {:?}",
+        accumulated.category_counts()
         );
 
     Ok(())
