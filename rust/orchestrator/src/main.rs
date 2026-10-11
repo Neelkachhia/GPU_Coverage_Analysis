@@ -7,6 +7,7 @@ use selector::{greedy_score, marginal_score};
 fn main() -> Result<()>
 {
     let kernels = generate_seed_kernels()?;
+    let cycle_budget: u64 = 4000;
     let mut accumulated = CoverageReport::empty();
     let mut evaluated: Vec<(KernelSpec, CoverageReport)> = Vec::new();
 
@@ -37,11 +38,22 @@ fn main() -> Result<()>
             " accumulated_unique_bins={}",
             accumulated.unique_bin_count()
             );
+
+        println!(" accumulated_cycles={}", accumulated.cycles_used());
     }
 
     println!(
         "\nFinal accumulated unique coverage bins = {}",
         accumulated.unique_bin_count()
+        );
+
+    println!("Final accumulated cycles = {}", accumulated.cycles_used());
+
+    println!("Cycle budget = {}", cycle_budget);
+
+    println!(
+        "Budget respected = {}",
+        accumulated.cycles_used() <= cycle_budget
         );
 
     Ok(())

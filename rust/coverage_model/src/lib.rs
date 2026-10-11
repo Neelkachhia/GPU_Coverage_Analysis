@@ -144,4 +144,9 @@ impl CoverageReport
     {
         Self::default()
     }
+
+    pub fn cycles_used(&self) -> u64
+    {
+        self.cycles
+    }
 }
