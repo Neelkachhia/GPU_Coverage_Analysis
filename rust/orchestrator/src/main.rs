@@ -7,7 +7,7 @@ use selector::{greedy_score, marginal_score};
 fn main() -> Result<()>
 {
     let kernels = generate_seed_kernels()?;
-    let baseline = CoverageReport::empty();
+    let mut accumulated = CoverageReport::empty();
 
     println!("Generated {} seed kernels", kernels.len());
 
@@ -18,13 +18,19 @@ fn main() -> Result<()>
             "kernel={} score={} marginal={} cycles={} bins={:?}",
             k.name,
             greedy_score(&report),
-            marginal_score(&report, &baseline),
+            marginal_score(&report, &accumulated),
             report.cycles,
             report.unique_bins()
         );
 
         let category_counts = report.category_counts();
         println!(" category_counts={:?}", category_counts);
+
+        accumulated = accumulated.merged_with(&report);
+        println!(
+            " accumulated_unique_bins={}",
+            accumulated.unique_bin_count()
+            );
     }
 
     Ok(())
