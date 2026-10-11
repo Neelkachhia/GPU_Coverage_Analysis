@@ -9,6 +9,7 @@ fn main() -> Result<()>
     let kernels = generate_seed_kernels()?;
     let cycle_budget: u64 = 4000;
     let mut accumulated = CoverageReport::empty();
+    let mut selected_kernel_names: Vec<String> = Vec::new();
     let mut evaluated: Vec<(KernelSpec, CoverageReport)> = Vec::new();
 
     println!("Generated {} seed kernels", kernels.len());
@@ -50,6 +51,7 @@ fn main() -> Result<()>
         if selected
         {
             accumulated = accumulated.merged_with(report);
+            selected_kernel_names.push(k.name.clone());
         }
         println!(
             " accumulated_unique_bins={}",
@@ -77,6 +79,15 @@ fn main() -> Result<()>
         "Final category counts = {:?}",
         accumulated.category_counts()
         );
+
+    println!("Selected kernels = {:?}", selected_kernel_names);
+    
+    println!("Selected kernel count = {}", selected_kernel_names.len());
+
+    let final_efficiency = if accumulated.cycles_used() == 0 {0.0} else 
+    { accumulated.unique_bin_count() as f64 / accumulated.cycles_used() as f64};
+
+    println!("Final coverage efficiency = {:.6}", final_efficiency);
 
     Ok(())
 }
