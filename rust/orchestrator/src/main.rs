@@ -7,7 +7,7 @@ use selector::{greedy_score, marginal_score};
 fn main() -> Result<()>
 {
     let kernels = generate_seed_kernels()?;
-    let baseline = CoverageReport::default();
+    let baseline = CoverageReport::empty();
 
     println!("Generated {} seed kernels", kernels.len());
 

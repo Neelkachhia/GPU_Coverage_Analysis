@@ -139,4 +139,9 @@ impl CoverageReport
 
         unique
     }
+
+    pub fn empty() -> Self
+    {
+        Self::default()
+    }
 }
