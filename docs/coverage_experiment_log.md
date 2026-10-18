@@ -82,3 +82,22 @@ cp -a ~/projects/research/experiments/vortex/coverage_diverge \
 ```
 
 Then apply the trace patch and follow the build and run steps above.
+
+## Orchestrator depth sweep (three repetitions)
+
+Three consecutive measured SIMX sweeps produced identical cycle and unique-bin
+counts at every depth:
+
+| Depth | Cycles per run | Unique bins |
+|---:|---:|---:|
+| 1 | 17,597 | 0 |
+| 2 | 20,060 | 3 |
+| 3 | 22,174 | 5 |
+| 4 | 24,421 | 7 |
+| 5 | 26,677 | 9 |
+| 6 | 29,066 | 11 |
+| 7 | 31,285 | 13 |
+| 8 | 33,559 | 15 |
+
+The identical results show repeatability for this pinned simulator, configuration, and workload. They do not establish performance behavior across other
+configurations or platforms.
