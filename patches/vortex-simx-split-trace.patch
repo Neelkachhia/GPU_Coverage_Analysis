@@ -1,0 +1,25 @@
+diff --git a/sim/simx/wctl_unit.cpp b/sim/simx/wctl_unit.cpp
+index 9a0e5b1..a1a9ca5 100644
+--- a/sim/simx/wctl_unit.cpp
++++ b/sim/simx/wctl_unit.cpp
+@@ -11,6 +11,7 @@
+ // See the License for the specific language governing permissions and
+ // limitations under the License.
+ 
++#include <cstdlib>
+ #include "wctl_unit.h"
+ #include <iostream>
+ #include "core.h"
+@@ -83,6 +84,12 @@ bool WctlUnit::process(instr_trace_t* trace) {
+         next_tmask = (then_tmask.count() <= else_tmask.count()) ? then_tmask : else_tmask;
+         warp.ipdom_stack.emplace(warp.tmask, next_pc);
+         core_->perf_stats().divergence += 1;
++        if (std::getenv("VX_SIMX_SPLIT_TRACE")) {
++          std::cout << "COV_SPLIT pc=0x" << std::hex << trace->PC
++                    << std::dec << " wid=" << trace->wid
++                    << " then=" << then_tmask.count()
++                    << " else=" << else_tmask.count() << "\n";
++        }
+       }
+       release_warp = core_->setTmask(trace->wid, next_tmask);
+     }

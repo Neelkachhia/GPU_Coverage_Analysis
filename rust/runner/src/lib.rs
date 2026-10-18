@@ -60,7 +60,7 @@ pub fn parse_divergent_split_count(output: &str) -> Result<u64>
 {
     output
         .lines()
-        .filter(|line| line.contains("branches:"))
+        .filter(|line| line.starts_with("PERF: branches:"))
         .find_map(|line|
         {
             line.split_once("divergent=")?
@@ -75,6 +75,102 @@ pub fn parse_divergent_split_count(output: &str) -> Result<u64>
 
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DivergenceEvent {
+    pub pc: u64,
+    pub warp: u32,
+    pub then_lanes: u32,
+    pub else_lanes: u32,
+}
+
+pub fn parse_divergence_events(output: &str) -> Result<Vec<DivergenceEvent>> {
+    let mut events = Vec::new();
+
+    for line in output.lines().filter(|line| line.starts_with("COV_SPLIT ")) {
+        let mut pc = None;
+        let mut warp = None;
+        let mut then_lanes = None;
+        let mut else_lanes = None;
+
+        for field in line.split_whitespace().skip(1) {
+            let (key, value) = field
+                .split_once('=')
+                .ok_or_else(|| anyhow::anyhow!("malformed COV_SPLIT field: {field}"))?;
+
+            match key {
+                "pc" => {
+                    let hex = value.strip_prefix("0x").unwrap_or(value);
+                    pc = Some(u64::from_str_radix(hex, 16).map_err(|e| {
+                        anyhow::anyhow!("invalid COV_SPLIT PC {value}: {e}")
+                    })?);
+                }
+                "wid" => {
+                    warp = Some(value.parse::<u32>().map_err(|e| {
+                        anyhow::anyhow!("invalid COV_SPLIT warp {value}: {e}")
+                    })?);
+                }
+                "then" => {
+                    then_lanes = Some(value.parse::<u32>().map_err(|e| {
+                        anyhow::anyhow!("invalid COV_SPLIT then count {value}: {e}")
+                    })?);
+                }
+                "else" => {
+                    else_lanes = Some(value.parse::<u32>().map_err(|e| {
+                        anyhow::anyhow!("invalid COV_SPLIT else count {value}: {e}")
+                    })?);
+                }
+                _ => {}
+            }
+        }
+
+        events.push(DivergenceEvent {
+            pc: pc.ok_or_else(|| anyhow::anyhow!("COV_SPLIT record has no PC: {line}"))?,
+            warp: warp.ok_or_else(|| anyhow::anyhow!("COV_SPLIT record has no warp: {line}"))?,
+            then_lanes: then_lanes
+                .ok_or_else(|| anyhow::anyhow!("COV_SPLIT record has no then count: {line}"))?,
+            else_lanes: else_lanes
+                .ok_or_else(|| anyhow::anyhow!("COV_SPLIT record has no else count: {line}"))?,
+        });
+    }
+
+    Ok(events)
+}
+#[cfg(test)]
+mod divergence_event_tests {
+    use super::{parse_divergence_events, DivergenceEvent};
+
+    #[test]
+    fn parses_split_pc_and_lane_counts() {
+        let output = [
+            "COV_SPLIT pc=0x800000c0 wid=3 then=2 else=2",
+            "COV_SPLIT pc=0x800000ec wid=7 then=3 else=1",
+        ]
+        .join("\n");
+
+        assert_eq!(
+            parse_divergence_events(&output).unwrap(),
+            vec![
+                DivergenceEvent {
+                    pc: 0x800000c0,
+                    warp: 3,
+                    then_lanes: 2,
+                    else_lanes: 2,
+                },
+                DivergenceEvent {
+                    pc: 0x800000ec,
+                    warp: 7,
+                    then_lanes: 3,
+                    else_lanes: 1,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn no_split_records_produce_an_empty_event_list() {
+        assert!(parse_divergence_events("PASSED!\n").unwrap().is_empty());
+    }
+}
 pub fn run_vortex_divergence(
     build_dir: &std::path::Path,
     driver: &str,
@@ -107,6 +203,34 @@ pub fn run_vortex_divergence(
     parse_divergent_split_count(&combined)
 }
 
+pub fn run_vortex_coverage_case(
+    build_dir: &std::path::Path,
+    depth: u32,
+) -> anyhow::Result<CoverageReport> {
+    let args = format!("--args=-n16 -d{depth}");
+
+    let output = std::process::Command::new("./ci/blackbox.sh")
+        .current_dir(build_dir)
+        .env("VX_SIMX_SPLIT_TRACE", "1")
+        .args([
+            "--driver=simx",
+            "--cores=2",
+            "--app=coverage_diverge",
+            "--perf=1",
+        ])
+        .arg(args)
+        .output()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}\n{stderr}");
+
+    if !output.status.success() || !combined.contains("PASSED!") {
+        anyhow::bail!("Vortex coverage run failed at depth {depth}:\n{combined}");
+    }
+
+    coverage_report_from_vortex_output(&combined)
+}
 pub fn parse_cycle_count(output: &str) -> anyhow::Result<u64>
 {
     output
@@ -132,14 +256,24 @@ pub fn coverage_report_from_vortex_output(
     let divergent_splits = parse_divergent_split_count(output)?;
     let cycles = parse_cycle_count(output)?;
 
-    let bins_hit = if divergent_splits > 0
+    let mut bins_hit = Vec::new();
+
+    if divergent_splits > 0
     {
-        vec![CoverageBinId::divergence("divergence_occurred")]
+        bins_hit.push(CoverageBinId::divergence("divergence_occurred"));
     }
-    else
+
+    for event in parse_divergence_events(output)?
     {
-        Vec::new()
-    };
+        bins_hit.push(CoverageBinId::divergence(format!(
+                    "pc_{:x}_split_seen",
+                    event.pc
+                )));
+        bins_hit.push(CoverageBinId::divergence(format!(
+                    "pc_{:x}_lanes_{}_{}",
+                    event.pc, event.then_lanes, event.else_lanes
+                )));
+    }
 
     Ok(CoverageReport {
         bins_hit,
@@ -158,6 +292,19 @@ mod perf_tests
     {
         let output = "PERF: branches: total=231949, divergent=8 (rate=0%)";
         assert_eq!(parse_divergent_split_count(output).unwrap(),8);
+    }
+
+    #[test]
+    fn prefers_aggregate_divergence_count_over_per_core_counts()
+    {
+        let output = [
+            "PERF: core0: branches: total=100, divergent=99 (rate=99%)",
+            "PERF: core1: branches: total=100, divergent=77 (rate=77%)",
+            "PERF: branches: total=200, divergent=12 (rate=6%)",
+        ]
+        .join("\n");
+
+        assert_eq!(parse_divergent_split_count(&output).unwrap(), 12);
     }
 
     #[test]
@@ -244,16 +391,56 @@ mod report_tests
         let output = [
             "PERF: branches: total=231949, divergent=8 (rate=0%)",
             "PERF: instrs=416, cycles=750, IPC=0.555",
-            ]
+            "COV_SPLIT pc=0x800000c0 wid=0 then=2 else=2",
+        ]
             .join("\n");
 
         let report = coverage_report_from_vortex_output(&output).unwrap();
 
-        assert_eq!(report.unique_bin_count(), 1);
+        assert_eq!(report.unique_bin_count(), 3);
         assert_eq!(report.cycles, 750);
         assert_eq!(
             report.unique_bins()[0].name,
             "divergence_occurred"
             );
+        assert!(report
+                .unique_bins()
+                .iter()
+                .any(|bin| bin.name == "pc_800000c0_split_seen"));
+        assert!(report
+                .unique_bins()
+                .iter()
+                .any(|bin| bin.name == "pc_800000c0_lanes_2_2"));
+    }
+}
+
+#[cfg(test)]
+mod vortex_coverage_integration_tests {
+    use super::run_vortex_coverage_case;
+    use std::path::PathBuf;
+
+    #[test]
+    #[ignore = "requires the pinned Vortex simx build and coverage_diverge test"]
+    fn simx_depth8_reports_seven_split_sites_and_lanes_bins() {
+        let build_dir = PathBuf::from(
+            std::env::var_os("VORTEX_BUILD_DIR")
+                .expect("set VORTEX_BUILD_DIR to the Vortex build directory"),
+        );
+
+        let report = run_vortex_coverage_case(&build_dir, 8).unwrap();
+        let bins = report.unique_bins();
+
+        let site_bins = bins
+            .iter()
+            .filter(|bin| bin.name.ends_with("_split_seen"))
+            .count();
+        let lane_count_bins = bins
+            .iter()
+            .filter(|bin| bin.name.contains("_lanes_"))
+            .count();
+
+        assert_eq!(site_bins, 7);
+        assert_eq!(lane_count_bins, 7);
+        assert_eq!(report.unique_bin_count(), 15);
     }
 }
