@@ -20,6 +20,7 @@
 
 const char* kernel_file = "kernel.vxbin";
 uint32_t count = 0;
+uint32_t branch_pattern = 0;
 uint32_t branch_depth = 8; // NEW: default nested depth
 
 vx_device_h device = nullptr;
@@ -32,12 +33,12 @@ kernel_arg_t kernel_arg = {};
 
 static void show_usage() {
   std::cout << "Vortex Test.\n";
-  std::cout << "Usage: [-k kernel] [-n words] [-d depth(1..8)] [-h]\n";
+  std::cout << "Usage: [-k kernel] [-n words] [-d depth(1..8)] [-p pattern(0..2)] [-h]\n";
 }
 
 static void parse_args(int argc, char **argv) {
   int c;
-  while ((c = getopt(argc, argv, "n:k:d:h")) != -1) {
+  while ((c = getopt(argc, argv, "n:k:d:p:h")) != -1) {
     switch (c) {
       case 'n':
         count = atoi(optarg);
@@ -48,6 +49,9 @@ static void parse_args(int argc, char **argv) {
       case 'd':
         branch_depth = std::max(1, std::min(8, atoi(optarg)));
         break;
+      case 'p':
+	branch_pattern = std::min(2, std::max(0, atoi(optarg)));
+	break;
       case 'h':
         show_usage();
         exit(0);
@@ -110,7 +114,8 @@ static inline int nested_chain_1to8_host(int v, uint32_t id, uint32_t depth) {
 void gen_ref_data(std::vector<int>& ref_data,
                   const std::vector<int>& src_data,
                   uint32_t size,
-                  uint32_t depth) {
+                  uint32_t depth,
+		  uint32_t pattern) {
   (void)src_data;
   if (depth > 8)
     depth = 8;
@@ -119,14 +124,15 @@ void gen_ref_data(std::vector<int>& ref_data,
   for (uint32_t id = 0; id < size; ++id) {
     int value = 0;
 
-    if (depth >= 1) { if ((id & 3) == 0)   value += 1; else value -= 1; }
-    if (depth >= 2) { if (id & 2)   value += 2; else value -= 2; }
-    if (depth >= 3) { if ((id & 3) == 0)   value += 3; else value -= 3; }
-    if (depth >= 4) { if ((id & 3) == 1)   value += 4; else value -= 4; }
-    if (depth >= 5) { if ((id & 3) == 2)  value += 5; else value -= 5; }
-    if (depth >= 6) { if ((id & 3) == 3)  value += 6; else value -= 6; }
-    if (depth >= 7) { if ((id & 3) != 1)  value += 7; else value -= 7; }
-    if (depth >= 8) { if ((id & 3) != 2) value += 8; else value -= 8; }
+ if (depth >= 1) { if (coverage_predicate((id & 3) == 0, pattern, id))
+	 value += 1; else value -= 1; }
+ if (depth >= 2) { if (coverage_predicate((id & 2) != 0, pattern, id)) value += 2; else value -= 2; }
+ if (depth >= 3) { if (coverage_predicate((id & 3) == 0, pattern, id)) value += 3; else value -= 3; }
+ if (depth >= 4) { if (coverage_predicate((id & 3) == 1, pattern, id)) value += 4; else value -= 4; }
+ if (depth >= 5) { if (coverage_predicate((id & 3) == 2, pattern, id)) value += 5; else value -= 5; }
+ if (depth >= 6) { if (coverage_predicate((id & 3) == 3, pattern, id)) value += 6; else value -= 6; }
+ if (depth >= 7) { if (coverage_predicate((id & 3) != 1, pattern, id)) value += 7; else value -= 7; }
+ if (depth >= 8) { if (coverage_predicate((id & 3) != 2, pattern, id)) value += 8; else value -= 8; }
 
     ref_data[id] = value;
   }
@@ -157,9 +163,11 @@ int main(int argc, char *argv[]) {
   std::cout << "number of points: " << num_points << "\n";
   std::cout << "buffer size: " << buf_size << " bytes\n";
   std::cout << "nested branch depth: " << branch_depth << "\n";
+  std::cout << "branch pattern: " << branch_pattern << "\n";
 
   kernel_arg.num_points   = num_points;
   kernel_arg.branch_depth = branch_depth; // NEW
+  kernel_arg.branch_pattern = branch_pattern;
 
   std::cout << "allocate device memory\n";
   RT_CHECK(vx_buffer_create(device, buf_size, VX_MEM_READ, &src_buffer));
@@ -210,7 +218,7 @@ int main(int argc, char *argv[]) {
   int errors = 0;
   {
     std::vector<int32_t> h_ref;
-    gen_ref_data(h_ref, h_src, num_points, branch_depth);
+    gen_ref_data(h_ref, h_src, num_points, branch_depth, branch_pattern);
 
     for (uint32_t i = 0; i < num_points; ++i) {
       int ref = h_ref[i];

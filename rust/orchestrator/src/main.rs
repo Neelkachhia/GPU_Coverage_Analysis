@@ -28,11 +28,12 @@ fn main() -> Result<()> {
             .context("set --vortex-build-dir or VORTEX_BUILD_DIR")?;
 
         println!("MODE=SIMX_MEASURED");
-        println!("depth | cycles | unique bins");
+        println!("pattern | depth | cycles | unique bins");
+      for pattern in 0..=2 {
         for depth in 1..=8 {
-            let report = run_vortex_coverage_case(&build_dir, depth)?;
+            let report = run_vortex_coverage_case(&build_dir, depth, pattern)?;
             println!(
-                "{depth:>5} | {:>6} | {:>11}",
+                "{pattern:>7} | {depth:>5} | {:>6} | {:>11}",
                 report.cycles,
                 report.unique_bin_count()
             );
@@ -40,6 +41,7 @@ fn main() -> Result<()> {
                 println!("        - {}", bin.name);
             }
         }
+      }
         return Ok(());
     }
 
