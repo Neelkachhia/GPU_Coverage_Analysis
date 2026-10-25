@@ -1,0 +1,3 @@
+simulator,pattern,threads,points,instructions,total_branches,divergent_events,cycles,result
+simx,3,8,2048,59680,9216,1792,96620,PASSED
+rtlsim,3,8,2048,59680,9216,1792,92953,PASSED

@@ -1,0 +1,4 @@
+case,depth,mask_count,reported_points,divergent_events,cycles,status,timeout_seconds
+shard,8,128,16,1024,214245,PASSED,60
+full,8,65534,16,,,TIMEOUT,300
+full,1,65534,16,,,TIMEOUT,180

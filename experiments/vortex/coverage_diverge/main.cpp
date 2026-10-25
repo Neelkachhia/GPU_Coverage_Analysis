@@ -21,7 +21,9 @@
 const char* kernel_file = "kernel.vxbin";
 uint32_t count = 0;
 uint32_t branch_pattern = 0;
-uint32_t branch_depth = 8; // NEW: default nested depth
+uint32_t branch_depth = 8;
+uint32_t branch_mask_start = 1;
+uint32_t branch_mask_count = 65534;
 
 vx_device_h device = nullptr;
 vx_buffer_h src_buffer = nullptr;
@@ -33,12 +35,12 @@ kernel_arg_t kernel_arg = {};
 
 static void show_usage() {
   std::cout << "Vortex Test.\n";
-  std::cout << "Usage: [-k kernel] [-n words] [-d depth(1..8)] [-p pattern(0..2)] [-h]\n";
+  std::cout << "Usage: [-k kernel] [-n words] [-d depth(1..8)] [-p pattern(0..5)] [-s first-mask(1..65534)] [-m mask-count] [-h]\n";
 }
 
 static void parse_args(int argc, char **argv) {
   int c;
-  while ((c = getopt(argc, argv, "n:k:d:p:h")) != -1) {
+  while ((c = getopt(argc, argv, "n:k:d:p:s:m:h")) != -1) {
     switch (c) {
       case 'n':
         count = atoi(optarg);
@@ -50,8 +52,14 @@ static void parse_args(int argc, char **argv) {
         branch_depth = std::max(1, std::min(8, atoi(optarg)));
         break;
       case 'p':
-	branch_pattern = std::min(2, std::max(0, atoi(optarg)));
+	branch_pattern = std::min(5, std::max(0, atoi(optarg)));
 	break;
+      case 's':
+        branch_mask_start = atoi(optarg);
+        break;
+      case 'm':
+        branch_mask_count = atoi(optarg);
+        break;
       case 'h':
         show_usage();
         exit(0);
@@ -111,28 +119,135 @@ static inline int nested_chain_1to8_host(int v, uint32_t id, uint32_t depth) {
   return v;
 }
 
+
+// Keep the oracle independent from the device-side mask helpers.
+static inline uint32_t expected_lane4_host(
+    uint32_t predicate, uint32_t pattern, uint32_t id) {
+  if (pattern == 2u) {
+    const uint32_t mask = ((id / 4u) % 14u) + 1u;
+    const uint32_t lane = id % 4u;
+    return ((mask / (1u << lane)) % 2u) != 0;
+  }
+  return ((predicate != 0) != ((pattern & 1u) != 0));
+}
+
+static inline uint32_t expected_lane8_host(uint32_t id) {
+  const uint32_t mask = ((id / 8u) % 254u) + 1u;
+  const uint32_t lane = id % 8u;
+  return ((mask / (1u << lane)) % 2u) != 0;
+}
+
+static inline int nested_divergence8_host(uint32_t id, uint32_t depth) {
+  int value = 0;
+  if (depth >= 1) { if (expected_lane8_host(id)) value += 1; else value -= 1; }
+  if (depth >= 2) { if (expected_lane8_host(id)) value += 2; else value -= 2; }
+  if (depth >= 3) { if (expected_lane8_host(id)) value += 3; else value -= 3; }
+  if (depth >= 4) { if (expected_lane8_host(id)) value += 4; else value -= 4; }
+  if (depth >= 5) { if (expected_lane8_host(id)) value += 5; else value -= 5; }
+  if (depth >= 6) { if (expected_lane8_host(id)) value += 6; else value -= 6; }
+  if (depth >= 7) { if (expected_lane8_host(id)) value += 7; else value -= 7; }
+  if (depth >= 8) { if (expected_lane8_host(id)) value += 8; else value -= 8; }
+  return value;
+}
+
+// Independent host oracle: derive the selected lane with division/modulo
+// rather than calling the shared device predicate helper.
+static inline uint32_t expected_lane16_host(
+    uint32_t id, uint32_t mask_start, uint32_t mask_count) {
+  const uint32_t lane = id % 16u;
+  const uint32_t mask_id = mask_start + ((id / 16u) % mask_count);
+  return ((mask_id / (1u << lane)) % 2u) != 0;
+}
+
+static inline int nested_divergence16_host(
+    uint32_t id, uint32_t depth, uint32_t mask_start, uint32_t mask_count) {
+  int value = 0;
+  if (depth >= 1) { if (expected_lane16_host(id, mask_start, mask_count)) value += 1; else value -= 1; }
+  if (depth >= 2) { if (expected_lane16_host(id, mask_start, mask_count)) value += 2; else value -= 2; }
+  if (depth >= 3) { if (expected_lane16_host(id, mask_start, mask_count)) value += 3; else value -= 3; }
+  if (depth >= 4) { if (expected_lane16_host(id, mask_start, mask_count)) value += 4; else value -= 4; }
+  if (depth >= 5) { if (expected_lane16_host(id, mask_start, mask_count)) value += 5; else value -= 5; }
+  if (depth >= 6) { if (expected_lane16_host(id, mask_start, mask_count)) value += 6; else value -= 6; }
+  if (depth >= 7) { if (expected_lane16_host(id, mask_start, mask_count)) value += 7; else value -= 7; }
+  if (depth >= 8) { if (expected_lane16_host(id, mask_start, mask_count)) value += 8; else value -= 8; }
+  return value;
+}
+
+static inline int nested_divergence16_loop_host(
+    uint32_t id, uint32_t depth, uint32_t mask_start, uint32_t mask_count) {
+  int value = 0;
+  uint32_t lane = id % 16u;
+  for (uint32_t mask_offset = 0; mask_offset < mask_count; ++mask_offset) {
+    uint32_t mask = mask_start + mask_offset;
+    for (uint32_t level = 0; level < depth; ++level) {
+      uint32_t bit = (lane + level) % 16u;
+      bool selected = ((mask / (1u << bit)) % 2u) != 0;
+      value += selected ? static_cast<int>(level + 1) : -static_cast<int>(level + 1);
+    }
+  }
+  return value;
+}
+
 void gen_ref_data(std::vector<int>& ref_data,
                   const std::vector<int>& src_data,
                   uint32_t size,
                   uint32_t depth,
-		  uint32_t pattern) {
+		  uint32_t pattern,
+                  uint32_t mask_start,
+                  uint32_t mask_count) {
   (void)src_data;
   if (depth > 8)
     depth = 8;
 
   ref_data.resize(size);
   for (uint32_t id = 0; id < size; ++id) {
+    if (pattern == 5u) {
+      ref_data[id] = nested_divergence16_loop_host(
+          id, depth, mask_start, mask_count);
+      continue;
+    }
+    if (pattern == 4u) {
+      ref_data[id] = nested_divergence16_host(id, depth, mask_start, mask_count);
+      continue;
+    }
+    if (pattern == 3u) {
+      ref_data[id] = nested_divergence8_host(id, depth);
+      continue;
+    }
     int value = 0;
 
- if (depth >= 1) { if (coverage_predicate((id & 3) == 0, pattern, id))
-	 value += 1; else value -= 1; }
- if (depth >= 2) { if (coverage_predicate((id & 2) != 0, pattern, id)) value += 2; else value -= 2; }
- if (depth >= 3) { if (coverage_predicate((id & 3) == 0, pattern, id)) value += 3; else value -= 3; }
- if (depth >= 4) { if (coverage_predicate((id & 3) == 1, pattern, id)) value += 4; else value -= 4; }
- if (depth >= 5) { if (coverage_predicate((id & 3) == 2, pattern, id)) value += 5; else value -= 5; }
- if (depth >= 6) { if (coverage_predicate((id & 3) == 3, pattern, id)) value += 6; else value -= 6; }
- if (depth >= 7) { if (coverage_predicate((id & 3) != 1, pattern, id)) value += 7; else value -= 7; }
- if (depth >= 8) { if (coverage_predicate((id & 3) != 2, pattern, id)) value += 8; else value -= 8; }
+    if (depth >= 1) {
+      if (expected_lane4_host((id & 3) == 0, pattern, id)) value += 1;
+      else value -= 1;
+    }
+    if (depth >= 2) {
+      if (expected_lane4_host((id & 2) != 0, pattern, id)) value += 2;
+      else value -= 2;
+    }
+    if (depth >= 3) {
+      if (expected_lane4_host((id & 3) == 0, pattern, id)) value += 3;
+      else value -= 3;
+    }
+    if (depth >= 4) {
+      if (expected_lane4_host((id & 3) == 1, pattern, id)) value += 4;
+      else value -= 4;
+    }
+    if (depth >= 5) {
+      if (expected_lane4_host((id & 3) == 2, pattern, id)) value += 5;
+      else value -= 5;
+    }
+    if (depth >= 6) {
+      if (expected_lane4_host((id & 3) == 3, pattern, id)) value += 6;
+      else value -= 6;
+    }
+    if (depth >= 7) {
+      if (expected_lane4_host((id & 3) != 1, pattern, id)) value += 7;
+      else value -= 7;
+    }
+    if (depth >= 8) {
+      if (expected_lane4_host((id & 3) != 2, pattern, id)) value += 8;
+      else value -= 8;
+    }
 
     ref_data[id] = value;
   }
@@ -142,6 +257,12 @@ int main(int argc, char *argv[]) {
   parse_args(argc, argv);
 
   if (count == 0) count = 1;
+  if (branch_mask_start == 0 || branch_mask_start > 65534 ||
+      branch_mask_count == 0 ||
+      branch_mask_count > 65535u - branch_mask_start) {
+    std::cerr << "mask shard must stay within mask IDs 1..65534\n";
+    return -1;
+  }
 
   std::srand(50);
 
@@ -164,10 +285,14 @@ int main(int argc, char *argv[]) {
   std::cout << "buffer size: " << buf_size << " bytes\n";
   std::cout << "nested branch depth: " << branch_depth << "\n";
   std::cout << "branch pattern: " << branch_pattern << "\n";
+  std::cout << "mask shard: " << branch_mask_start << ".."
+            << (branch_mask_start + branch_mask_count - 1) << "\n";
 
   kernel_arg.num_points   = num_points;
-  kernel_arg.branch_depth = branch_depth; // NEW
+  kernel_arg.branch_depth = branch_depth;
   kernel_arg.branch_pattern = branch_pattern;
+  kernel_arg.branch_mask_start = branch_mask_start;
+  kernel_arg.branch_mask_count = branch_mask_count;
 
   std::cout << "allocate device memory\n";
   RT_CHECK(vx_buffer_create(device, buf_size, VX_MEM_READ, &src_buffer));
@@ -218,7 +343,8 @@ int main(int argc, char *argv[]) {
   int errors = 0;
   {
     std::vector<int32_t> h_ref;
-    gen_ref_data(h_ref, h_src, num_points, branch_depth, branch_pattern);
+    gen_ref_data(h_ref, h_src, num_points, branch_depth, branch_pattern,
+                 branch_mask_start, branch_mask_count);
 
     for (uint32_t i = 0; i < num_points; ++i) {
       int ref = h_ref[i];

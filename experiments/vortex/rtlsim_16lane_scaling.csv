@@ -1,0 +1,10 @@
+case,repeat,n_arg,reported_points,divergent_events,cycles,status,timeout_seconds
+scale,1,16,512,224,16863,PASSED,45
+scale,1,64,2048,896,52067,PASSED,45
+scale,1,256,8192,3584,192117,PASSED,45
+scale,1,1024,32768,,,TIMEOUT,45
+repeat,1,256,8192,3584,192117,PASSED,
+repeat,2,256,8192,3584,192117,PASSED,
+repeat,3,256,8192,3584,192117,PASSED,
+full_attempt,1,8192,262144,,,TIMEOUT,180
+shard_attempt,1,2048,65536,,,TIMEOUT,120

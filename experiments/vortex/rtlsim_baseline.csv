@@ -1,0 +1,4 @@
+pattern,points,depth,total_branches,divergent_events,instructions,cycles,ipc,result
+0,512,8,5376,896,26656,45411,0.587,PASSED
+1,512,8,5376,896,26656,45416,0.587,PASSED
+2,512,8,6400,896,36256,57461,0.631,PASSED

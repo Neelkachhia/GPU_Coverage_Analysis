@@ -236,7 +236,16 @@ pub fn run_vortex_coverage_case(
     depth: u32,
     pattern: u32,
 ) -> anyhow::Result<CoverageReport> {
-    let args = format!("--args=-n16 -d{depth} -p{pattern}");
+    run_vortex_coverage_case_with_count(build_dir, depth, pattern, 16)
+}
+
+pub fn run_vortex_coverage_case_with_count(
+    build_dir: &std::path::Path,
+    depth: u32,
+    pattern: u32,
+    count: u32,
+) -> anyhow::Result<CoverageReport> {
+    let args = format!("--args=-n{count} -d{depth} -p{pattern}");
 
     let output = std::process::Command::new("./ci/blackbox.sh")
         .current_dir(build_dir)
@@ -255,7 +264,7 @@ pub fn run_vortex_coverage_case(
     let combined = format!("{stdout}\n{stderr}");
 
     if !output.status.success() || !combined.contains("PASSED!") {
-        anyhow::bail!("Vortex coverage run failed at depth {depth}:\n{combined}");
+        anyhow::bail!("Vortex coverage run failed at depth {depth}, pattern {pattern}, count {count}:\n{combined}");
     }
 
     coverage_report_from_vortex_output(&combined)
@@ -560,5 +569,38 @@ mod vortex_coverage_integration_tests {
         assert_eq!(masks_per_site.len(), 7);
         assert!(masks_per_site.values().all(|&count| count == 14));
         assert_eq!(report.unique_bin_count(), 127);
+    }
+
+    #[test]
+    #[ignore = "requires the 8-thread Vortex simx build and coverage_diverge test"]
+    fn simx_depth8_pattern3_covers_all_nonuniform_8lane_masks() {
+        use super::run_vortex_coverage_case_with_count;
+
+        let build_dir = PathBuf::from(
+            std::env::var_os("VORTEX_BUILD_DIR")
+                .expect("set VORTEX_BUILD_DIR to the 8-thread Vortex build directory"),
+        );
+
+        // Two cores x four warps x eight threads x 32 groups = 2,048 points.
+        let report = run_vortex_coverage_case_with_count(&build_dir, 8, 3, 32).unwrap();
+        let bins = report.unique_bins();
+
+        let site_bins = bins
+            .iter()
+            .filter(|bin| bin.name.ends_with("_split_seen"))
+            .count();
+        let lane_bins = bins
+            .iter()
+            .filter(|bin| bin.name.contains("_lanes_"))
+            .count();
+        let mask_bins = bins
+            .iter()
+            .filter(|bin| bin.name.contains("_masks_"))
+            .count();
+
+        assert_eq!(site_bins, 7);
+        assert_eq!(lane_bins, 49);
+        assert_eq!(mask_bins, 7 * 254);
+        assert_eq!(report.unique_bin_count(), 1 + 7 + 49 + 7 * 254);
     }
 }

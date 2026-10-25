@@ -30,3 +30,6 @@ Thumbs.db
 .vscode/
 .idea/
 
+
+# Generated simulator logs (summaries are kept as CSV)
+experiments/vortex/*.log

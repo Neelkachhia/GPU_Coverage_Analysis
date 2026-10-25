@@ -1,0 +1,7 @@
+case,repeat,points,mutant_hits,reference_errors,exit_code,result
+baseline,0,256,0,0,0,PASSED
+mutant,1,256,64,64,2,DETECTED
+mutant,2,256,64,64,2,DETECTED
+mutant,3,256,64,64,2,DETECTED
+mutant,4,256,64,64,2,DETECTED
+mutant,5,256,64,64,2,DETECTED

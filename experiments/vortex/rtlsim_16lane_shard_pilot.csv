@@ -1,0 +1,5 @@
+simulator,mask_start,mask_count,points,total_branches,divergent_events,cycles,split_sites,distinct_pairs_per_site,result
+rtlsim,1,128,2048,4608,896,44915,0,0,PASSED
+simx,1,128,2048,4608,896,45593,7,128,PASSED
+rtlsim,65407,128,2048,4608,896,44644,0,0,PASSED
+simx,65407,128,2048,4608,896,45842,7,128,PASSED
