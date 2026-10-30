@@ -1,5 +1,14 @@
 # Vortex SIMX Divergence Coverage Experiment
 
+## Reproduction paths
+
+Set these variables to the local checkouts before running commands in this log:
+
+```bash
+export RESEARCH_ROOT=/path/to/GPU_Coverage_Analysis
+export VORTEX_ROOT=/path/to/vortex
+```
+
 ## Environment
 
 - Vortex revision: `1cd71c4`
@@ -53,8 +62,8 @@ revision `1cd71c4`.
 From a clean Vortex checkout at that revision, apply and build it:
 
 ```bash
-git -C ~/projects/vortex apply ~/projects/research/patches/vortex-simx-split-trace.patch
-cd ~/projects/vortex/build
+git -C $VORTEX_ROOT apply $RESEARCH_ROOT/patches/vortex-simx-split-trace.patch
+cd $VORTEX_ROOT/build
 make -C sim/simx
 
 ```
@@ -62,7 +71,7 @@ make -C sim/simx
 Then run the depth-8 case from the build directory:
 
 ```bash
-cd ~/projects/vortex/build
+cd $VORTEX_ROOT/build
 VX_SIMX_SPLIT_TRACE=1 ./ci/blackbox.sh --driver=simx --cores=2 \
   --app=coverage_diverge --perf=1 --args="-n16 -d8"
 ```
@@ -77,8 +86,8 @@ source files are stored in
 into the Vortex regression tests:
 
 ```bash
-cp -a ~/projects/research/experiments/vortex/coverage_diverge \
-  ~/projects/vortex/tests/regression/
+cp -a $RESEARCH_ROOT/experiments/vortex/coverage_diverge \
+  $VORTEX_ROOT/tests/regression/
 ```
 
 Then apply the trace patch and follow the build and run steps above.
@@ -180,7 +189,7 @@ Reproduce the matrix from the WSL research checkout after installing the
 experimental test in the Vortex checkout:
 
 ```bash
-cd ~/projects/research
+cd $RESEARCH_ROOT
 bash experiments/vortex/run_mask_mutation_matrix.sh
 ```
 
@@ -571,7 +580,7 @@ counts remain model-specific and are not a direct performance comparison.
 
 Reproduce with:
 
-bash ~/projects/research/experiments/vortex/run_8lane_mask_sweep.sh
+bash $RESEARCH_ROOT/experiments/vortex/run_8lane_mask_sweep.sh
 
 The harness temporarily switches the source configuration from four to eight
 threads, configures the alternate build, runs both simulators, checks the
@@ -609,7 +618,7 @@ width is restored to four in the source configuration after the run.
 
 Reproduce with:
 
-    bash ~/projects/research/experiments/vortex/run_16lane_mask_sweep.sh
+    bash $RESEARCH_ROOT/experiments/vortex/run_16lane_mask_sweep.sh
 
 The harness configures a separate build-threads16 tree, runs exhaustive SIMX
 coverage and the RTLSIM smoke case, checks their host references and proportional
@@ -697,7 +706,7 @@ The full run used a build configured for 16 threads, one launched warp
 (`-n1`), depth 8, and the default mask range 1 through 65,534:
 
 ```bash
-cd ~/projects/vortex/build-threads16
+cd $VORTEX_ROOT/build-threads16
 VX_SIMX_SPLIT_TRACE=1 ./ci/blackbox.sh --driver=simx --cores=1 \
   --app=coverage_diverge --perf=1 --args="-n1 -d8 -p5"
 ```
@@ -731,7 +740,7 @@ unverified.
 Reproduce the RTLSIM shard with:
 
 ```bash
-cd ~/projects/vortex/build-threads16
+cd $VORTEX_ROOT/build-threads16
 ./ci/blackbox.sh --driver=rtlsim --cores=1 --app=coverage_diverge \
   --perf=1 --args="-n1 -d8 -p5 -s1 -m128"
 ```

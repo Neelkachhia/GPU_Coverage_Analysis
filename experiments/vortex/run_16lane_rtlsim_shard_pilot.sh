@@ -1,8 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RESEARCH_ROOT="${RESEARCH_ROOT:-$HOME/projects/research}"
-VORTEX_ROOT="${VORTEX_ROOT:-$HOME/projects/vortex}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+RESEARCH_ROOT="${RESEARCH_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+VORTEX_ROOT="${VORTEX_ROOT:-}"
+if [[ -z "$VORTEX_ROOT" ]]; then
+  echo "Set VORTEX_ROOT to the Vortex source checkout" >&2
+  exit 2
+fi
+ROOT="$VORTEX_ROOT"
+VORTEX="$VORTEX_ROOT"
+RESEARCH="$RESEARCH_ROOT"
+
 BUILD="${VORTEX_BUILD_DIR:-$VORTEX_ROOT/build-threads16}"
 APP_DIR="$BUILD/tests/regression/coverage_diverge"
 APP="$APP_DIR/coverage_diverge"

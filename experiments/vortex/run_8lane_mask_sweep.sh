@@ -1,8 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$HOME/projects/vortex"
-RESEARCH="$HOME/projects/research"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+RESEARCH_ROOT="${RESEARCH_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+VORTEX_ROOT="${VORTEX_ROOT:-}"
+if [[ -z "$VORTEX_ROOT" ]]; then
+  echo "Set VORTEX_ROOT to the Vortex source checkout" >&2
+  exit 2
+fi
+ROOT="$VORTEX_ROOT"
+VORTEX="$VORTEX_ROOT"
+RESEARCH="$RESEARCH_ROOT"
+
 ALT="$ROOT/build-threads8b"
 CFG="$ROOT/VX_config.toml"
 OUT="$RESEARCH/experiments/vortex/pattern3_8lane_results.csv"

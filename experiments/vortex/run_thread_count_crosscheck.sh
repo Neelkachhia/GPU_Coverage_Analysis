@@ -1,9 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT="$HOME/projects/vortex"
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+RESEARCH_ROOT="${RESEARCH_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+VORTEX_ROOT="${VORTEX_ROOT:-}"
+if [[ -z "$VORTEX_ROOT" ]]; then
+  echo "Set VORTEX_ROOT to the Vortex source checkout" >&2
+  exit 2
+fi
+ROOT="$VORTEX_ROOT"
+VORTEX="$VORTEX_ROOT"
+RESEARCH="$RESEARCH_ROOT"
+
 ALT="$ROOT/build-threads8b"
 CFG="$ROOT/VX_config.toml"
-OUT="$HOME/projects/research/experiments/vortex/thread_count_crosscheck.csv"
+OUT="$RESEARCH_ROOT/experiments/vortex/thread_count_crosscheck.csv"
 TMP="$(mktemp -d /tmp/vx-threads8.XXXXXX)"
 cp "$CFG" "$TMP/VX_config.toml"
 restore() { cp "$TMP/VX_config.toml" "$CFG"; rm -rf "$TMP"; }

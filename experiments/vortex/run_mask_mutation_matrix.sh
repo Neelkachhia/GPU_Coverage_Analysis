@@ -1,8 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RESEARCH="${RESEARCH_ROOT:-$HOME/projects/research}"
-VORTEX="${VORTEX_ROOT:-$HOME/projects/vortex}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+RESEARCH_ROOT="${RESEARCH_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+VORTEX_ROOT="${VORTEX_ROOT:-}"
+if [[ -z "$VORTEX_ROOT" ]]; then
+  echo "Set VORTEX_ROOT to the Vortex source checkout" >&2
+  exit 2
+fi
+ROOT="$VORTEX_ROOT"
+VORTEX="$VORTEX_ROOT"
+RESEARCH="$RESEARCH_ROOT"
+
 BUILD="$VORTEX/build"
 SRC="$VORTEX/sim/simx/wctl_unit.cpp"
 OBJ="$BUILD/sw/runtime/obj/wctl_unit.o"

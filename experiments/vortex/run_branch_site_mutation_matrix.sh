@@ -1,11 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT="${VORTEX_ROOT:-$HOME/projects/vortex}"
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+RESEARCH_ROOT="${RESEARCH_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+VORTEX_ROOT="${VORTEX_ROOT:-}"
+if [[ -z "$VORTEX_ROOT" ]]; then
+  echo "Set VORTEX_ROOT to the Vortex source checkout" >&2
+  exit 2
+fi
+ROOT="$VORTEX_ROOT"
+VORTEX="$VORTEX_ROOT"
+RESEARCH="$RESEARCH_ROOT"
+
 BUILD="${VORTEX_BUILD_DIR:-$ROOT/build}"
 SRC="$ROOT/hw/rtl/core/VX_alu_int.sv"
 APP_DIR="$BUILD/tests/regression/coverage_diverge"
 APP="$APP_DIR/coverage_diverge"
-CSV="${1:-$HOME/projects/research/experiments/vortex/branch_site_mutation_matrix.csv}"
+CSV="${1:-$RESEARCH_ROOT/experiments/vortex/branch_site_mutation_matrix.csv}"
 TMP="$(mktemp -d /tmp/vx-branch-site.XXXXXX)"
 cp "$SRC" "$TMP/original.sv"
 restore() { cp "$TMP/original.sv" "$SRC"; rm -rf "$TMP"; }

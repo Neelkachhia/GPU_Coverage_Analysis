@@ -1,9 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT="$HOME/projects/vortex"
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+RESEARCH_ROOT="${RESEARCH_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+VORTEX_ROOT="${VORTEX_ROOT:-}"
+if [[ -z "$VORTEX_ROOT" ]]; then
+  echo "Set VORTEX_ROOT to the Vortex source checkout" >&2
+  exit 2
+fi
+ROOT="$VORTEX_ROOT"
+VORTEX="$VORTEX_ROOT"
+RESEARCH="$RESEARCH_ROOT"
+
 BUILD="$ROOT/build"
 SRC="$ROOT/sim/simx/lsu_unit.cpp"
-OUT="$HOME/projects/research/experiments/vortex/load_data_mutation.csv"
+OUT="$RESEARCH_ROOT/experiments/vortex/load_data_mutation.csv"
 TMP="$(mktemp -d /tmp/vx-load-mutant.XXXXXX)"
 cp "$SRC" "$TMP/original.cpp"
 restore() { cp "$TMP/original.cpp" "$SRC"; rm -rf "$TMP"; }
