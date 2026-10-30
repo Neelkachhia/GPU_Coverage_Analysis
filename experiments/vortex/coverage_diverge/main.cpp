@@ -24,6 +24,7 @@ uint32_t branch_pattern = 0;
 uint32_t branch_depth = 8;
 uint32_t branch_mask_start = 1;
 uint32_t branch_mask_count = 65534;
+uint32_t branch_seed = 0;
 
 vx_device_h device = nullptr;
 vx_buffer_h src_buffer = nullptr;
@@ -35,12 +36,12 @@ kernel_arg_t kernel_arg = {};
 
 static void show_usage() {
   std::cout << "Vortex Test.\n";
-  std::cout << "Usage: [-k kernel] [-n words] [-d depth(1..8)] [-p pattern(0..5)] [-s first-mask(1..65534)] [-m mask-count] [-h]\n";
+  std::cout << "Usage: [-k kernel] [-n words] [-d depth(1..8)] [-p pattern(0..6)] [-r seed] [-s first-mask(1..65534)] [-m mask-count] [-h]\n";
 }
 
 static void parse_args(int argc, char **argv) {
   int c;
-  while ((c = getopt(argc, argv, "n:k:d:p:s:m:h")) != -1) {
+  while ((c = getopt(argc, argv, "n:k:d:p:r:s:m:h")) != -1) {
     switch (c) {
       case 'n':
         count = atoi(optarg);
@@ -52,8 +53,11 @@ static void parse_args(int argc, char **argv) {
         branch_depth = std::max(1, std::min(8, atoi(optarg)));
         break;
       case 'p':
-	branch_pattern = std::min(5, std::max(0, atoi(optarg)));
+	branch_pattern = std::min(6, std::max(0, atoi(optarg)));
 	break;
+	case 'r':
+	  branch_seed = strtoul(optarg, nullptr, 0);
+	  break;
       case 's':
         branch_mask_start = atoi(optarg);
         break;
@@ -131,6 +135,30 @@ static inline uint32_t expected_lane4_host(
   return ((predicate != 0) != ((pattern & 1u) != 0));
 }
 
+static inline uint32_t expected_random_lane4_host(uint32_t id, uint32_t seed) {
+  uint32_t value = (id / 4u) + seed * 0x9e3779b9u;
+  value ^= value / 65536u;
+  value = (value * 0x7feb352du) & 0xffffffffu;
+  value ^= value / 32768u;
+  value = (value * 0x846ca68bu) & 0xffffffffu;
+  value ^= value / 65536u;
+  const uint32_t mask = (value % 14u) + 1u;
+  return ((mask / (1u << (id % 4u))) % 2u) != 0;
+}
+
+static inline int nested_divergence_random_host(uint32_t id, uint32_t depth, uint32_t seed) {
+  int value = 0;
+  if (depth >= 1) { if (expected_random_lane4_host(id, seed)) value += 1; else value -= 1; }
+  if (depth >= 2) { if (expected_random_lane4_host(id, seed)) value += 2; else value -= 2; }
+  if (depth >= 3) { if (expected_random_lane4_host(id, seed)) value += 3; else value -= 3; }
+  if (depth >= 4) { if (expected_random_lane4_host(id, seed)) value += 4; else value -= 4; }
+  if (depth >= 5) { if (expected_random_lane4_host(id, seed)) value += 5; else value -= 5; }
+  if (depth >= 6) { if (expected_random_lane4_host(id, seed)) value += 6; else value -= 6; }
+  if (depth >= 7) { if (expected_random_lane4_host(id, seed)) value += 7; else value -= 7; }
+  if (depth >= 8) { if (expected_random_lane4_host(id, seed)) value += 8; else value -= 8; }
+  return value;
+}
+
 static inline uint32_t expected_lane8_host(uint32_t id) {
   const uint32_t mask = ((id / 8u) % 254u) + 1u;
   const uint32_t lane = id % 8u;
@@ -201,6 +229,10 @@ void gen_ref_data(std::vector<int>& ref_data,
 
   ref_data.resize(size);
   for (uint32_t id = 0; id < size; ++id) {
+    if (pattern == 6u) {
+      ref_data[id] = nested_divergence_random_host(id, depth, branch_seed);
+      continue;
+    }
     if (pattern == 5u) {
       ref_data[id] = nested_divergence16_loop_host(
           id, depth, mask_start, mask_count);
@@ -285,6 +317,8 @@ int main(int argc, char *argv[]) {
   std::cout << "buffer size: " << buf_size << " bytes\n";
   std::cout << "nested branch depth: " << branch_depth << "\n";
   std::cout << "branch pattern: " << branch_pattern << "\n";
+  if (branch_pattern == 6)
+    std::cout << "branch seed: " << branch_seed << "\n";
   std::cout << "mask shard: " << branch_mask_start << ".."
             << (branch_mask_start + branch_mask_count - 1) << "\n";
 
@@ -293,6 +327,7 @@ int main(int argc, char *argv[]) {
   kernel_arg.branch_pattern = branch_pattern;
   kernel_arg.branch_mask_start = branch_mask_start;
   kernel_arg.branch_mask_count = branch_mask_count;
+  kernel_arg.branch_seed = branch_seed;
 
   std::cout << "allocate device memory\n";
   RT_CHECK(vx_buffer_create(device, buf_size, VX_MEM_READ, &src_buffer));

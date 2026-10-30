@@ -11,6 +11,7 @@ typedef struct {
   uint32_t branch_pattern;
   uint32_t branch_mask_start;
   uint32_t branch_mask_count;
+  uint32_t branch_seed;
 } kernel_arg_t;
 
 static inline uint32_t coverage_predicate(
@@ -21,6 +22,17 @@ static inline uint32_t coverage_predicate(
     return (then_mask >> (id & 3u)) & 1u;
   }
   return (predicate != 0) ^ ((pattern & 1u) != 0);
+}
+
+static inline uint32_t coverage_random_predicate4(uint32_t id, uint32_t seed) {
+  uint32_t value = (id / 4u) + seed * 0x9e3779b9u;
+  value ^= value >> 16;
+  value *= 0x7feb352du;
+  value ^= value >> 15;
+  value *= 0x846ca68bu;
+  value ^= value >> 16;
+  uint32_t then_mask = (value % 14u) + 1u;
+  return (then_mask >> (id & 3u)) & 1u;
 }
 
 static inline uint32_t coverage_predicate8(uint32_t id) {

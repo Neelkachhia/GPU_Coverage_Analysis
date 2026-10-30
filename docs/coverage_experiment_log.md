@@ -213,7 +213,8 @@ Pattern 2 activated and detected every mutation in this generated family. The
 two fixed patterns together did not activate 16 cases. The CSV contains one
 row per mutant and pattern, including activation count, output mismatch count,
 classification, and process exit status:
-`experiments/vortex/mutation_matrix.csv`.
+`experiments/vortex/mutation_matrix.csv`. The costed rerun uses the same
+schema plus instruction and cycle columns.
 
 These 56 cases are systematic variants of one SIMX-side lane-misrouting
 operator, not 56 independent implementation defects. The harness temporarily
@@ -225,6 +226,47 @@ Pattern 2's full activation is expected from its construction to cycle through
 all 14 nonuniform masks. This is controlled evidence that the mask sweep reaches
 the targeted input space; it is not an RTL mutation campaign or evidence of
 fault coverage across other Vortex configurations.
+
+### Initial costed rerun (superseded by the seeded-schedule rerun below)
+
+The mutation matrix was rerun from Vortex revision `1cd71c4` using the same
+four-thread SIMX configuration. The rerun records retired instructions and
+cycles for every mutant/pattern execution. Its raw output is
+`experiments/vortex/mutation_matrix_simx_costs.csv`; the clean-kernel baseline
+is `experiments/vortex/simx_baseline_rerun.csv`. Recompute the suite summary
+with:
+
+```bash
+RESULT_CSV="$RESEARCH_ROOT/experiments/vortex/mutation_matrix_simx_costs.csv" \
+  VORTEX_ROOT="$VORTEX_ROOT" bash experiments/vortex/run_mask_mutation_matrix.sh
+python3 experiments/vortex/analyze_mask_mutations.py
+```
+
+The clean-kernel baseline can be reproduced separately from the Vortex build
+directory:
+
+```bash
+cd "$VORTEX_ROOT/build"
+for p in 0 1 2; do
+  ./ci/blackbox.sh --driver=simx --cores=2 --app=coverage_diverge \
+    --perf=1 --args="-n16 -d8 -p$p"
+done
+```
+
+Patterns 0 and 1 each detected 28 of 56 variants. As a two-pattern suite,
+they detected 40; 16 variants were not activated by either pattern. Pattern 2
+detected all 56. Summing the measured cycles for all executions in each suite
+gives 9,896,338 cycles for patterns 0+1 (112 executions; 176,720 cycles per
+mutant suite case on average) and 6,255,288 cycles for pattern 2 (56
+executions; 111,702 cycles per mutant suite case). In this run, the exhaustive
+suite detected 16 more variants and used 36.8% fewer simulator cycles per
+mutant suite case than the two fixed-pattern suite.
+
+This is a measured comparison for the generated 56-variant operator, not an
+estimate of general defect detection. It is based on one run per mutant and
+pattern, with the fault-injection hook enabled; repeat campaigns and other
+fault families are needed to assess variability and generality. The result
+must not be described as equal-budget coverage or a general mutation score.
 
 ## RTLSIM baseline validation
 
@@ -769,3 +811,69 @@ pattern 4 over masks 1–128 (SIMX, 2,048 points), and looped pattern 5 over
 masks 1–128 (RTLSIM, 64 points). These checks validate the separate oracle
 paths on representative workloads; they do not replace rerunning every full
 exhaustive experiment after the oracle-only change.
+
+## Seeded four-lane schedule comparison
+
+The current test adds pattern 6, a deterministic seeded schedule that hashes
+each four-ID group to one of the 14 nonuniform four-lane masks. The host oracle
+uses a separate arithmetic formulation. At depth 8, seeds 1 through 5 each
+passed the output check and produced 127 unique coverage bins: seven split
+sites, 21 then/else population bins, 98 ordered mask-pair bins, and the
+divergence bin. Each seed generated all 14 mask pairs at each site for this
+512-point workload.
+
+Clean-kernel baseline measurements from the same current source/build were:
+
+| Pattern | Seed | Instructions | SIMX cycles | Result |
+|---:|---:|---:|---:|---|
+| 0 | 0 | 27,424 | 49,553 | Passed |
+| 1 | 0 | 27,424 | 49,553 | Passed |
+| 2 | 0 | 37,024 | 61,624 | Passed |
+| 6 | 1 | 40,992 | 60,829 | Passed |
+| 6 | 2 | 40,992 | 60,965 | Passed |
+| 6 | 3 | 40,992 | 60,769 | Passed |
+| 6 | 4 | 40,992 | 60,969 | Passed |
+| 6 | 5 | 40,992 | 60,879 | Passed |
+
+The costed mutation campaign ran each of the same 56 single-lane SIMX
+misrouting variants under patterns 0, 1, and 2, and under pattern 6 with each
+of seeds 1 through 5. The raw 448-row result is
+`experiments/vortex/mutation_matrix_simx_random.csv`; the corresponding clean
+baselines are in `experiments/vortex/simx_baseline_random_rerun.csv`. Rebuild
+the summary with:
+
+```bash
+RANDOM_SEEDS=5 \
+  RESULT_CSV="$RESEARCH_ROOT/experiments/vortex/mutation_matrix_simx_random.csv" \
+  VORTEX_ROOT="$VORTEX_ROOT" bash experiments/vortex/run_mask_mutation_matrix.sh
+python3 experiments/vortex/analyze_mask_mutations.py
+```
+
+| Suite | Detected | Not reached | Mutant runs | Total SIMX cycles | Mean cycles per mutant case |
+|---|---:|---:|---:|---:|---:|
+| Pattern 0 | 28/56 | 28/56 | 56 | 5,109,260 | 91,236.8 |
+| Pattern 1 | 28/56 | 28/56 | 56 | 4,881,441 | 87,168.6 |
+| Patterns 0+1 | 40/56 | 16/56 | 112 | 9,990,701 | 178,405.4 |
+| Pattern 2, exhaustive | 56/56 | 0/56 | 56 | 6,298,120 | 112,466.4 |
+| Pattern 6, seed 1 | 56/56 | 0/56 | 56 | 5,981,975 | 106,821.0 |
+| Pattern 6, seed 2 | 56/56 | 0/56 | 56 | 6,039,469 | 107,847.7 |
+| Pattern 6, seed 3 | 56/56 | 0/56 | 56 | 6,052,498 | 108,080.3 |
+| Pattern 6, seed 4 | 56/56 | 0/56 | 56 | 6,003,464 | 107,204.7 |
+| Pattern 6, seed 5 | 56/56 | 0/56 | 56 | 6,018,919 | 107,480.7 |
+
+Each seeded run detected all 56 generated variants. The best observed seeded
+run used 5.0% fewer simulator cycles than pattern 2 and 40.1% fewer than the
+two-pattern suite. Those figures are per campaign on this simulator and fault
+family; the comparison is not normalized to equal cycle budgets. The five
+seeds are deterministic schedules, not five independently sampled test
+campaigns. Since the harness deliberately mutates SIMX's lane-routing decision
+for one exact mask and lane, these results measure adequacy against that
+operator only. They do not establish a general mutation score or show
+discovery of naturally occurring defects.
+
+A second 224-execution campaign reran patterns 0, 1, and 2 and pattern 6 with
+seed 1. It reproduced all per-mutant outcomes and cycle counts exactly. The
+repeat data are preserved in
+`experiments/vortex/mutation_matrix_simx_repeat.csv`. This checks run
+repeatability in the pinned simulator; it does not add new fault variants or
+independent random samples.

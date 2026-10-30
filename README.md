@@ -61,6 +61,21 @@ The logged mutations are synthetic, targeted fault models. A pass or kill
 result applies to the tested mutant and workload; it is not a general RTL
 fault-coverage estimate.
 
+The latest four-lane matrix includes patterns 0, 1, and 2, plus five
+deterministic seeded schedules (pattern 6). Rebuild that data with:
+
+```bash
+RANDOM_SEEDS=5 \
+RESULT_CSV="$PWD/experiments/vortex/mutation_matrix_simx_random.csv" \
+  VORTEX_ROOT="$VORTEX_ROOT" bash experiments/vortex/run_mask_mutation_matrix.sh
+python3 experiments/vortex/analyze_mask_mutations.py
+```
+
+The analyzer checks all 56 mutant IDs for each fixed pattern and seed, then
+reports each seed separately. These cycle totals describe one campaign of
+synthetic lane-routing variants on SIMX. They are not a general test-efficiency
+or hardware fault-coverage estimate.
+
 ## Project status
 
 The present implementation and results focus on divergence and active-lane

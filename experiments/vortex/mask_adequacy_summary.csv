@@ -1,0 +1,10 @@
+suite,patterns,mutant_variants,killed,not_reached,survived,detection_rate_pct,mutant_runs,mutant_cycle_total,mean_cycles_per_mutant_suite_case,mean_cycles_per_execution,clean_workload_cycles_per_execution
+pattern_0,0,56,28,28,0,50.00,56,5109260,91236.8,91236.8,49553
+pattern_1,1,56,28,28,0,50.00,56,4881441,87168.6,87168.6,49553
+pattern_2,2,56,56,0,0,100.00,56,6298120,112466.4,112466.4,61624
+fixed_0_plus_1,0+1,56,40,16,0,71.43,112,9990701,178405.4,89202.7,49553
+seeded_random_seed_1,6@seed1,56,56,0,0,100.00,56,5981975,106821.0,106821.0,60829
+seeded_random_seed_2,6@seed2,56,56,0,0,100.00,56,6039469,107847.7,107847.7,60965
+seeded_random_seed_3,6@seed3,56,56,0,0,100.00,56,6052498,108080.3,108080.3,60769
+seeded_random_seed_4,6@seed4,56,56,0,0,100.00,56,6003464,107204.7,107204.7,60969
+seeded_random_seed_5,6@seed5,56,56,0,0,100.00,56,6018919,107480.7,107480.7,60879

@@ -18,6 +18,11 @@ OBJ="$BUILD/sw/runtime/obj/wctl_unit.o"
 LIB="$BUILD/sw/runtime/libsimx.so"
 APP="$BUILD/tests/regression/coverage_diverge/coverage_diverge"
 OUT="${RESULT_CSV:-$RESEARCH/experiments/vortex/mutation_matrix.csv}"
+RANDOM_SEEDS="${RANDOM_SEEDS:-0}"
+if [[ ! "$RANDOM_SEEDS" =~ ^[0-9]+$ ]]; then
+  echo "RANDOM_SEEDS must be a nonnegative integer" >&2
+  exit 2
+fi
 
 for file in "$SRC" "$OBJ" "$LIB" "$APP"; do
   test -f "$file" || { echo "Missing required file: $file" >&2; exit 1; }
@@ -83,7 +88,7 @@ cp "$tmpdir/wctl_unit.cpp" "$SRC"
 cp "$tmpdir/wctl_unit.o" "$OBJ"
 cp "$tmpdir/libsimx.so" "$LIB"
 
-printf 'fault_id,original_then_mask,flipped_lane,pattern,activations,errors,outcome,exit_status\n' > "$OUT"
+printf 'fault_id,original_then_mask,flipped_lane,pattern,seed,activations,errors,outcome,exit_status,instructions,cycles\n' > "$OUT"
 for fault_id in $(seq 1 56); do
   target_mask=$(( (fault_id - 1) / 4 + 1 ))
   lane=$(( (fault_id - 1) % 4 ))
@@ -112,14 +117,66 @@ for fault_id in $(seq 1 56); do
         printf "%d,%d,%s", activations+0, errors+0, outcome
       }' "$log")
     IFS=, read -r activations errors outcome <<< "$summary"
-    printf '%d,%s,%d,%d,%d,%d,%s,%d\n' \
+    perf=$(sed -n 's/.*instrs=\([0-9][0-9]*\).*cycles=\([0-9][0-9]*\).*/\1,\2/p' "$log" | tail -1)
+    if [[ -z "$perf" ]]; then
+      echo "Missing instruction/cycle counters for mutant $fault_id pattern $pattern" >&2
+      tail -30 "$log" >&2
+      exit 1
+    fi
+    IFS=, read -r instructions cycles <<< "$perf"
+    printf '%d,%s,%d,%d,0,%d,%d,%s,%d,%s,%s\n' \
       "$fault_id" "$mask_label" "$lane" "$pattern" \
-      "$activations" "$errors" "$outcome" "$exit_status" >> "$OUT"
-    printf 'fault=%02d mask=%s lane=%d pattern=%d activation=%d errors=%d outcome=%s exit=%d\n' \
+      "$activations" "$errors" "$outcome" "$exit_status" \
+      "$instructions" "$cycles" >> "$OUT"
+    printf 'fault=%02d mask=%s lane=%d pattern=%d activation=%d errors=%d outcome=%s exit=%d cycles=%s\n' \
       "$fault_id" "$mask_label" "$lane" "$pattern" \
-      "$activations" "$errors" "$outcome" "$exit_status"
+      "$activations" "$errors" "$outcome" "$exit_status" "$cycles"
   done
 done
+if (( RANDOM_SEEDS > 0 )); then
+  for fault_id in $(seq 1 56); do
+    target_mask=$(( (fault_id - 1) / 4 + 1 ))
+    lane=$(( (fault_id - 1) % 4 ))
+    mask_label=""
+    for bit in 3 2 1 0; do
+      mask_label+="$(( (target_mask >> bit) & 1 ))"
+    done
+    cp "$tmpdir/mutant-libsimx.so" "$LIB"
+    for seed in $(seq 1 "$RANDOM_SEEDS"); do
+      log="$tmpdir/run_m${fault_id}_p6_s${seed}.log"
+      if (cd "$BUILD/tests/regression/coverage_diverge" &&
+          LD_LIBRARY_PATH="$BUILD/sw/runtime" VORTEX_DRIVER=simx \
+          VX_SIMX_MASK_FAULT_ID="$fault_id" VX_SIMX_SPLIT_TRACE=1 \
+          ./coverage_diverge -n16 -d8 -p6 -r"$seed") > "$log" 2>&1; then
+        exit_status=0
+      else
+        exit_status=$?
+      fi
+      summary=$(awk '
+        /^COV_MUTATION / { activations++ }
+        /Found [0-9]+ errors!/ { errors=$2 }
+        END {
+          outcome = errors > 0 ? "KILLED" : (activations > 0 ? "SURVIVED" : "NOT_REACHED")
+          printf "%d,%d,%s", activations+0, errors+0, outcome
+        }' "$log")
+      IFS=, read -r activations errors outcome <<< "$summary"
+      perf=$(sed -n 's/.*instrs=\([0-9][0-9]*\).*cycles=\([0-9][0-9]*\).*/\1,\2/p' "$log" | tail -1)
+      if [[ -z "$perf" ]]; then
+        echo "Missing instruction/cycle counters for mutant $fault_id random seed $seed" >&2
+        tail -30 "$log" >&2
+        exit 1
+      fi
+      IFS=, read -r instructions cycles <<< "$perf"
+      printf '%d,%s,%d,6,%d,%d,%d,%s,%d,%s,%s\n' \
+        "$fault_id" "$mask_label" "$lane" "$seed" \
+        "$activations" "$errors" "$outcome" "$exit_status" \
+        "$instructions" "$cycles" >> "$OUT"
+      printf 'fault=%02d mask=%s lane=%d pattern=6 seed=%d activation=%d errors=%d outcome=%s exit=%d cycles=%s\n' \
+        "$fault_id" "$mask_label" "$lane" "$seed" \
+        "$activations" "$errors" "$outcome" "$exit_status" "$cycles"
+    done
+  done
+fi
 restore
 trap - EXIT
 if strings "$LIB" | grep -q VX_SIMX_MASK_FAULT_ID; then
