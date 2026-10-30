@@ -642,8 +642,8 @@ seven split sites; two masks were repeated.
 
 | Simulator | Points | Instructions | Total branches | Divergent events | Cycles | Result |
 |---|---:|---:|---:|---:|---:|---|
-| SIMX | 1,048,576 | 15,269,920 | 2,359,296 | 458,752 | 24,919,572 | Passed |
-| RTLSIM smoke | 2,048 | 29,856 | 4,608 | 896 | 51,368 | Passed |
+| SIMX | 1,048,576 | 11,993,120 | 2,490,368 | 458,752 | 21,319,809 | Passed |
+| RTLSIM smoke | 2,048 | 23,456 | 4,864 | 896 | 44,529 | Passed |
 
 Each of the seven static split PCs produced 65,536 events and all 65,534
 distinct then/else mask pairs. The host reference derives each selected lane
@@ -753,23 +753,24 @@ VX_SIMX_SPLIT_TRACE=1 ./ci/blackbox.sh --driver=simx --cores=1 \
   --app=coverage_diverge --perf=1 --args="-n1 -d8 -p5"
 ```
 
-SIMX passed with 524,272 divergent events. Each of the eight static split PCs
+After the independent host-oracle change, the full SIMX run was repeated and
+passed with 524,272 divergent events. Each of the eight static split PCs
 recorded 65,534 events and 65,534 distinct then/else mask pairs. Total
-performance counters were 2,162,631 branches, 7,667,563 instructions, and
-117,438,380 cycles. Per-site counts are in
+performance counters were 2,162,633 branches, 7,667,567 instructions, and
+117,438,629 cycles. Per-site counts are in
 `experiments/vortex/loop_pattern5_simx_full_sites.csv`; the full trace was
 saved as `experiments/vortex/loop_pattern5_simx_full.log`.
 
 | Split PC | Events | Distinct mask pairs |
 |---|---:|---:|
-| `0x800001ac` | 65,534 | 65,534 |
-| `0x800001d8` | 65,534 | 65,534 |
-| `0x80000204` | 65,534 | 65,534 |
-| `0x80000238` | 65,534 | 65,534 |
-| `0x8000026c` | 65,534 | 65,534 |
-| `0x800002a0` | 65,534 | 65,534 |
-| `0x800002d4` | 65,534 | 65,534 |
-| `0x80000308` | 65,534 | 65,534 |
+| `0x80000600` | 65,534 | 65,534 |
+| `0x8000062c` | 65,534 | 65,534 |
+| `0x80000658` | 65,534 | 65,534 |
+| `0x8000068c` | 65,534 | 65,534 |
+| `0x800006c0` | 65,534 | 65,534 |
+| `0x800006f4` | 65,534 | 65,534 |
+| `0x80000728` | 65,534 | 65,534 |
+| `0x8000075c` | 65,534 | 65,534 |
 
 RTLSIM passed the same kernel over masks 1 through 128 with 1,024 divergent
 events and 214,245 cycles. The full 65,534-mask RTLSIM run was stopped by a
@@ -808,9 +809,11 @@ tree and both copies compared equal.
 After this change, bounded correctness runs passed for four-lane pattern 2
 (SIMX, 512 points), eight-lane pattern 3 (SIMX, 2,048 points), sixteen-lane
 pattern 4 over masks 1–128 (SIMX, 2,048 points), and looped pattern 5 over
-masks 1–128 (RTLSIM, 64 points). These checks validate the separate oracle
-paths on representative workloads; they do not replace rerunning every full
-exhaustive experiment after the oracle-only change.
+masks 1–128 (RTLSIM, 64 points). The full pattern-4 SIMX sweep and pattern-5
+SIMX sweep were subsequently repeated from the independent-oracle source and
+passed; their refreshed results and per-site counts are recorded above. The
+bounded RTLSIM smoke check for pattern 4 also passed. Full exhaustive RTLSIM
+enumeration remains unverified.
 
 ## Seeded four-lane schedule comparison
 
@@ -877,3 +880,56 @@ repeat data are preserved in
 `experiments/vortex/mutation_matrix_simx_repeat.csv`. This checks run
 repeatability in the pinned simulator; it does not add new fault variants or
 independent random samples.
+
+## Matched-point comparison for the routing mutants
+
+The original costed matrix used 512 task points for each pattern, so the
+two-pattern fixed suite received twice as many task points as either single
+pattern suite. A follow-up campaign matched the total point count per mutant:
+patterns 0 and 1 each used 256 points, while pattern 2 and seeded pattern 6
+used 512 points. Thus every suite processed 512 task points per mutant. Each
+arm used the same 56 routing variants at depth 8; seed 1 was used for pattern
+6. All four clean baselines passed before mutation.
+
+| Suite | Points per mutant | Detected | Not reached | Mutant runs | Mean SIMX cycles per mutant suite |
+|---|---:|---:|---:|---:|---:|
+| Pattern 0 | 256 | 28/56 | 28/56 | 56 | 45,958.9 |
+| Pattern 1 | 256 | 28/56 | 28/56 | 56 | 43,989.9 |
+| Patterns 0+1 | 512 total | 40/56 | 16/56 | 112 | 89,948.8 |
+| Pattern 2, exhaustive | 512 | 56/56 | 0/56 | 56 | 112,466.4 |
+| Pattern 6, seed 1 | 512 | 56/56 | 0/56 | 56 | 106,821.0 |
+
+For the combined fixed suite, the mean is the sum of both per-mutant runs.
+Clean-kernel cycle totals were 50,838 for patterns 0+1, 61,624 for pattern 2,
+and 60,829 for pattern 6 seed 1. The exhaustive and seeded suites detected
+16 additional variants, at higher observed SIMX cycle cost than the fixed
+pair in this campaign. This is a matched task-point comparison, not an
+equal-cycle comparison. The cost includes simulator execution with the
+temporary mutation hook and is specific to this kernel and simulator build.
+
+The campaign has 224 mutant executions in
+`experiments/vortex/mutation_matrix_equal_points.csv`; clean baselines are in
+`experiments/vortex/simx_baseline_equal_points.csv`. A second 224-execution
+campaign, `experiments/vortex/mutation_matrix_equal_points_repeat.csv`, matched
+every outcome, activation count, mismatch count, instruction count, and cycle
+count in the first campaign. Reproduce the baselines and mutation matrix from
+the research checkout with:
+
+```bash
+VORTEX_ROOT="$VORTEX_ROOT" \
+  bash experiments/vortex/run_mask_mutation_baselines.sh
+
+FIXED_COUNT=8 SWEEP_COUNT=16 SEEDED_COUNT=16 RANDOM_SEEDS=1 \
+RESULT_CSV="$RESEARCH_ROOT/experiments/vortex/mutation_matrix_equal_points.csv" \
+VORTEX_ROOT="$VORTEX_ROOT" \
+  bash experiments/vortex/run_mask_mutation_matrix.sh
+
+python3 experiments/vortex/analyze_mask_mutations.py \
+  --mutations experiments/vortex/mutation_matrix_equal_points.csv \
+  --baseline experiments/vortex/simx_baseline_equal_points.csv \
+  --output experiments/vortex/mask_adequacy_equal_points_summary.csv \
+  --require-equal-points
+```
+
+The scripts assume the recorded two-core, four-thread-per-warp SIMX build;
+they check point totals and baseline results before reporting the summary.

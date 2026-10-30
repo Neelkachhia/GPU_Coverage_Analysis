@@ -19,10 +19,19 @@ LIB="$BUILD/sw/runtime/libsimx.so"
 APP="$BUILD/tests/regression/coverage_diverge/coverage_diverge"
 OUT="${RESULT_CSV:-$RESEARCH/experiments/vortex/mutation_matrix.csv}"
 RANDOM_SEEDS="${RANDOM_SEEDS:-0}"
+FIXED_COUNT="${FIXED_COUNT:-16}"
+SWEEP_COUNT="${SWEEP_COUNT:-16}"
+SEEDED_COUNT="${SEEDED_COUNT:-16}"
 if [[ ! "$RANDOM_SEEDS" =~ ^[0-9]+$ ]]; then
   echo "RANDOM_SEEDS must be a nonnegative integer" >&2
   exit 2
 fi
+for count in "$FIXED_COUNT" "$SWEEP_COUNT" "$SEEDED_COUNT"; do
+  if [[ ! "$count" =~ ^[1-9][0-9]*$ ]]; then
+    echo "workload counts must be positive integers" >&2
+    exit 2
+  fi
+done
 
 for file in "$SRC" "$OBJ" "$LIB" "$APP"; do
   test -f "$file" || { echo "Missing required file: $file" >&2; exit 1; }
@@ -88,7 +97,7 @@ cp "$tmpdir/wctl_unit.cpp" "$SRC"
 cp "$tmpdir/wctl_unit.o" "$OBJ"
 cp "$tmpdir/libsimx.so" "$LIB"
 
-printf 'fault_id,original_then_mask,flipped_lane,pattern,seed,activations,errors,outcome,exit_status,instructions,cycles\n' > "$OUT"
+printf 'fault_id,original_then_mask,flipped_lane,pattern,seed,points,activations,errors,outcome,exit_status,instructions,cycles\n' > "$OUT"
 for fault_id in $(seq 1 56); do
   target_mask=$(( (fault_id - 1) / 4 + 1 ))
   lane=$(( (fault_id - 1) % 4 ))
@@ -97,12 +106,14 @@ for fault_id in $(seq 1 56); do
     mask_label+="$(( (target_mask >> bit) & 1 ))"
   done
   for pattern in 0 1 2; do
+    count="$FIXED_COUNT"
+    if [[ "$pattern" == 2 ]]; then count="$SWEEP_COUNT"; fi
     cp "$tmpdir/mutant-libsimx.so" "$LIB"
     log="$tmpdir/run_m${fault_id}_p${pattern}.log"
     if (cd "$BUILD/tests/regression/coverage_diverge" &&
         LD_LIBRARY_PATH="$BUILD/sw/runtime" VORTEX_DRIVER=simx \
         VX_SIMX_MASK_FAULT_ID="$fault_id" VX_SIMX_SPLIT_TRACE=1 \
-        ./coverage_diverge -n16 -d8 -p"$pattern") > "$log" 2>&1; then
+        ./coverage_diverge -n"$count" -d8 -p"$pattern") > "$log" 2>&1; then
       exit_status=0
     else
       exit_status=$?
@@ -124,8 +135,8 @@ for fault_id in $(seq 1 56); do
       exit 1
     fi
     IFS=, read -r instructions cycles <<< "$perf"
-    printf '%d,%s,%d,%d,0,%d,%d,%s,%d,%s,%s\n' \
-      "$fault_id" "$mask_label" "$lane" "$pattern" \
+    printf '%d,%s,%d,%d,0,%d,%d,%d,%s,%d,%s,%s\n' \
+      "$fault_id" "$mask_label" "$lane" "$pattern" "$((count * 32))" \
       "$activations" "$errors" "$outcome" "$exit_status" \
       "$instructions" "$cycles" >> "$OUT"
     printf 'fault=%02d mask=%s lane=%d pattern=%d activation=%d errors=%d outcome=%s exit=%d cycles=%s\n' \
@@ -147,7 +158,7 @@ if (( RANDOM_SEEDS > 0 )); then
       if (cd "$BUILD/tests/regression/coverage_diverge" &&
           LD_LIBRARY_PATH="$BUILD/sw/runtime" VORTEX_DRIVER=simx \
           VX_SIMX_MASK_FAULT_ID="$fault_id" VX_SIMX_SPLIT_TRACE=1 \
-          ./coverage_diverge -n16 -d8 -p6 -r"$seed") > "$log" 2>&1; then
+          ./coverage_diverge -n"$SEEDED_COUNT" -d8 -p6 -r"$seed") > "$log" 2>&1; then
         exit_status=0
       else
         exit_status=$?
@@ -167,8 +178,8 @@ if (( RANDOM_SEEDS > 0 )); then
         exit 1
       fi
       IFS=, read -r instructions cycles <<< "$perf"
-      printf '%d,%s,%d,6,%d,%d,%d,%s,%d,%s,%s\n' \
-        "$fault_id" "$mask_label" "$lane" "$seed" \
+      printf '%d,%s,%d,6,%d,%d,%d,%d,%s,%d,%s,%s\n' \
+        "$fault_id" "$mask_label" "$lane" "$seed" "$((SEEDED_COUNT * 32))" \
         "$activations" "$errors" "$outcome" "$exit_status" \
         "$instructions" "$cycles" >> "$OUT"
       printf 'fault=%02d mask=%s lane=%d pattern=6 seed=%d activation=%d errors=%d outcome=%s exit=%d cycles=%s\n' \

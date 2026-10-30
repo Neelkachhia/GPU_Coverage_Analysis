@@ -23,6 +23,8 @@ OUT_FIELDS = [
     "mean_cycles_per_mutant_suite_case",
     "mean_cycles_per_execution",
     "clean_workload_cycles_per_execution",
+    "test_points_per_mutant_variant",
+    "clean_workload_cycles_per_mutant_suite",
 ]
 ALLOWED_OUTCOMES = {"KILLED", "NOT_REACHED", "SURVIVED"}
 
@@ -85,8 +87,18 @@ def summarize(mutation_path: Path, baseline_path: Path) -> list[dict[str, str]]:
     required_baselines = {(p, "0") for p in fixed_patterns} | {("6", s) for s in random_seeds}
     if set(baseline) != required_baselines:
         raise ValueError("baseline rows must match patterns 0, 1, 2 and each random mutation seed")
-    if len({(row["points"], row["depth"]) for row in baseline.values()}) != 1:
-        raise ValueError("baseline workloads must use matching point counts and depth")
+    if len({row["depth"] for row in baseline.values()}) != 1:
+        raise ValueError("baseline workloads must use the same depth")
+
+    for (pattern, seed, fault_id), row in by_mutant_pattern.items():
+        baseline_key = (pattern, seed)
+        if baseline_key not in baseline:
+            raise ValueError(f"missing clean baseline for pattern={pattern}, seed={seed}")
+        expected_points = baseline[baseline_key]["points"]
+        if row.get("points") and row["points"] != expected_points:
+            raise ValueError(
+                f"mutant workload mismatch for pattern={pattern}, seed={seed}, mutant={fault_id}"
+            )
 
     suites: list[tuple[str, list[dict[str, str]], list[tuple[str, str]]]] = []
     for pattern in ("0", "1", "2"):
@@ -118,7 +130,9 @@ def summarize(mutation_path: Path, baseline_path: Path) -> list[dict[str, str]]:
             )
         counts = Counter(suite_outcomes)
         cycles = sum(int(row["cycles"]) for row in cases)
-        clean_cycles = sum(int(baseline[key]["cycles"]) for key in baseline_keys) // len(baseline_keys)
+        clean_suite_cycles = sum(int(baseline[key]["cycles"]) for key in baseline_keys)
+        clean_cycles = clean_suite_cycles / len(baseline_keys)
+        test_points = sum(int(baseline[key]["points"]) for key in baseline_keys)
         results.append({
             "suite": name,
             "patterns": "+".join(key[0] if key[0] != "6" else f"6@seed{key[1]}" for key in baseline_keys),
@@ -131,7 +145,9 @@ def summarize(mutation_path: Path, baseline_path: Path) -> list[dict[str, str]]:
             "mutant_cycle_total": str(cycles),
             "mean_cycles_per_mutant_suite_case": f"{cycles / len(mutant_ids):.1f}",
             "mean_cycles_per_execution": f"{cycles / len(cases):.1f}",
-            "clean_workload_cycles_per_execution": str(clean_cycles),
+            "clean_workload_cycles_per_execution": f"{clean_cycles:.1f}",
+            "test_points_per_mutant_variant": str(test_points),
+            "clean_workload_cycles_per_mutant_suite": str(clean_suite_cycles),
         })
     return results
 
@@ -141,9 +157,24 @@ def main() -> None:
     parser.add_argument("--mutations", type=Path, default=ROOT / "mutation_matrix_simx_random.csv")
     parser.add_argument("--baseline", type=Path, default=ROOT / "simx_baseline_random_rerun.csv")
     parser.add_argument("--output", type=Path, default=ROOT / "mask_adequacy_summary.csv")
+    parser.add_argument(
+        "--require-equal-points",
+        action="store_true",
+        help="require the fixed-pair, exhaustive, and seeded suites to use equal total points",
+    )
     args = parser.parse_args()
 
     results = summarize(args.mutations, args.baseline)
+    if args.require_equal_points:
+        budgets = {
+            row["test_points_per_mutant_variant"]
+            for row in results
+            if row["suite"] == "fixed_0_plus_1"
+            or row["suite"] == "pattern_2"
+            or row["suite"].startswith("seeded_random_")
+        }
+        if len(budgets) != 1:
+            raise ValueError(f"suite point budgets are not equal: {sorted(budgets)}")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=OUT_FIELDS)

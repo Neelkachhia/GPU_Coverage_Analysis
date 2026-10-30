@@ -1,0 +1,5 @@
+pattern,seed,points,depth,instructions,cycles,result
+0,0,256,8,13728,25419,PASSED
+1,0,256,8,13728,25419,PASSED
+2,0,512,8,37024,61624,PASSED
+6,1,512,8,40992,60829,PASSED

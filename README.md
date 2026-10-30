@@ -13,7 +13,7 @@ verification framework.
 - The experimental `coverage_diverge` kernel generates nonuniform masks for
   4-, 8-, and 16-lane warps.
 - An opt-in SIMX trace records each divergent split's compiled PC, warp ID,
-  then/else lane counts, and lane masks.
+  then/else lane counts, and ordered lane masks.
 - Result summaries are CSV files under `experiments/vortex/`; the measurement
   details and known limits are in
   [`docs/coverage_experiment_log.md`](docs/coverage_experiment_log.md).
@@ -75,6 +75,31 @@ The analyzer checks all 56 mutant IDs for each fixed pattern and seed, then
 reports each seed separately. These cycle totals describe one campaign of
 synthetic lane-routing variants on SIMX. They are not a general test-efficiency
 or hardware fault-coverage estimate.
+
+The repository also contains a matched-point comparison. The fixed-pattern
+pair uses 256 points per pattern; the exhaustive and seeded schedules use 512
+points each, giving every suite 512 total points per mutant. Reproduce it with:
+
+```bash
+VORTEX_ROOT="$VORTEX_ROOT" \
+  bash experiments/vortex/run_mask_mutation_baselines.sh
+
+FIXED_COUNT=8 SWEEP_COUNT=16 SEEDED_COUNT=16 RANDOM_SEEDS=1 \
+RESULT_CSV="$PWD/experiments/vortex/mutation_matrix_equal_points.csv" \
+VORTEX_ROOT="$VORTEX_ROOT" \
+  bash experiments/vortex/run_mask_mutation_matrix.sh
+
+python3 experiments/vortex/analyze_mask_mutations.py \
+  --mutations experiments/vortex/mutation_matrix_equal_points.csv \
+  --baseline experiments/vortex/simx_baseline_equal_points.csv \
+  --output experiments/vortex/mask_adequacy_equal_points_summary.csv \
+  --require-equal-points
+```
+
+The fixed-pattern pair detected 40/56 generated variants; the exhaustive and
+seeded cases each detected 56/56. The higher detection came with higher
+measured SIMX cycle counts than the fixed pair. See the experiment log for
+the exact values and limits.
 
 ## Project status
 
